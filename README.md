@@ -1,0 +1,1 @@
+# PredictGuard: Predicción de vida útil restante de motores aeronáuticos mediatne Deep Learning y Optimización económica del mantenimiento
