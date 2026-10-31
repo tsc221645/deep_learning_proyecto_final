@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Conda and virtual environments
+.venv/
+venv/
+env/
+
+# Local environment variables
+.env
+!.env.example
+
+# Local datasets and generated data
+/data/*
+!/data/raw/
+!/data/interim/
+!/data/processed/
+/data/raw/*
+!/data/raw/.gitkeep
+/data/interim/*
+!/data/interim/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+
+# Generated artifacts
+/artifacts/*
+!/artifacts/models/
+!/artifacts/metrics/
+!/artifacts/figures/
+!/artifacts/experiments/
+/artifacts/models/*
+!/artifacts/models/.gitkeep
+/artifacts/metrics/*
+!/artifacts/metrics/.gitkeep
+/artifacts/figures/*
+!/artifacts/figures/.gitkeep
+/artifacts/experiments/*
+!/artifacts/experiments/.gitkeep
+PredictGuard_Plan_Desarrollo_Por_Fases.md
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Notebook and build caches
+.ipynb_checkpoints/
+build/
+dist/
