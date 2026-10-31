@@ -2,7 +2,7 @@ seed: 42
 device: auto
 
 data:
-  root: data
+  root: data/raw
   subset: FD001
   train_file: train_FD001.txt
   test_file: test_FD001.txt

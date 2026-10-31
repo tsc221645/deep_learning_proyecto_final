@@ -49,3 +49,15 @@ conda activate dm1
 El proyecto usa el wheel CUDA 12.6 de PyTorch. La GPU local se detecta correctamente. FD001 es suficientemente pequeño para trabajar y entrenar aquí; Kaggle no hace falta por ahora.
 
 Los archivos locales de C-MAPSS se mantienen fuera de Git. La configuración inicial está en `configs/config.yaml`.
+
+## Fase 2: datos NASA C-MAPSS FD001
+
+Descarga y valida los archivos originales en `data/raw/`. Si ya están descargados, la descarga no los sobrescribe.
+
+```powershell
+conda activate dm1
+.\scripts\download.ps1
+.\scripts\validate.ps1
+```
+
+La validación genera `data/raw/data_manifest.json` con los hashes SHA-256, tamaños, conteos y procedencia. Los datos se mantienen fuera de Git; el manifiesto sí se versiona.

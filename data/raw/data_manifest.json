@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "dataset": "NASA C-MAPSS FD001",
+  "manifest_created_at": "2026-10-31T21:23:16Z",
+  "source": {
+    "catalog_url": "https://catalog.data.gov/dataset/cmapss-jet-engine-simulated-data",
+    "download_url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip",
+    "dataset_citation": "A. Saxena and K. Goebel (2008). \"Turbofan Engine Degradation Simulation Data Set\", NASA Prognostics Data Repository, NASA Ames Research Center.",
+    "paper_citation": "A. Saxena, K. Goebel, D. Simon, and N. Eklund (2008). \"Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation\", Proceedings of the 1st International Conference on Prognostics and Health Management.",
+    "license": "No explicit data license was found in the included readme or the cited NASA repository page. Do not infer a license.",
+    "accessed_at": "2026-10-31T21:23:16Z"
+  },
+  "archive": {
+    "size_bytes": 12425978,
+    "sha256": "74bef434a34db25c7bf72e668ea4cd52afe5f2cf8e44367c55a82bfd91a5a34f",
+    "url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip",
+    "downloaded_at": "2026-10-31T21:23:16Z"
+  },
+  "files": {
+    "train_FD001.txt": {
+      "size_bytes": 3515356,
+      "sha256": "963b5e22825b34d8b21c69e1aeb4af3e647050eb672ee8834ba4b5d91d2de0f8",
+      "rows": 20631,
+      "columns": [
+        "unit_id",
+        "cycle",
+        "setting_1",
+        "setting_2",
+        "setting_3",
+        "sensor_1",
+        "sensor_2",
+        "sensor_3",
+        "sensor_4",
+        "sensor_5",
+        "sensor_6",
+        "sensor_7",
+        "sensor_8",
+        "sensor_9",
+        "sensor_10",
+        "sensor_11",
+        "sensor_12",
+        "sensor_13",
+        "sensor_14",
+        "sensor_15",
+        "sensor_16",
+        "sensor_17",
+        "sensor_18",
+        "sensor_19",
+        "sensor_20",
+        "sensor_21"
+      ]
+    },
+    "test_FD001.txt": {
+      "size_bytes": 2228855,
+      "sha256": "3cda7109ce17bafb5443f2ac926cfcf88154b941b8c4cf95eb55d1ddd6f52851",
+      "rows": 13096,
+      "columns": [
+        "unit_id",
+        "cycle",
+        "setting_1",
+        "setting_2",
+        "setting_3",
+        "sensor_1",
+        "sensor_2",
+        "sensor_3",
+        "sensor_4",
+        "sensor_5",
+        "sensor_6",
+        "sensor_7",
+        "sensor_8",
+        "sensor_9",
+        "sensor_10",
+        "sensor_11",
+        "sensor_12",
+        "sensor_13",
+        "sensor_14",
+        "sensor_15",
+        "sensor_16",
+        "sensor_17",
+        "sensor_18",
+        "sensor_19",
+        "sensor_20",
+        "sensor_21"
+      ]
+    },
+    "RUL_FD001.txt": {
+      "size_bytes": 429,
+      "sha256": "a19c8ec94931949d0485bdc35118206e9c81c4547b422efb9cf86f4ceddbceca",
+      "rows": 100,
+      "columns": [
+        "rul"
+      ]
+    },
+    "readme.txt": {
+      "size_bytes": 2442,
+      "sha256": "4f5270554b775c67e73aff383c5436fd329d6e4cc3d3a116913276fae511269b"
+    }
+  },
+  "validation": {
+    "train_rows": 20631,
+    "train_trajectories": 100,
+    "train_cycle_range": [
+      1,
+      362
+    ],
+    "test_rows": 13096,
+    "test_trajectories": 100,
+    "test_cycle_range": [
+      1,
+      303
+    ],
+    "test_rul_values": 100,
+    "test_rul_range": [
+      7,
+      145
+    ],
+    "test_rul_order": "unit_id 1-100",
+    "columns_per_sensor_file": 26,
+    "sensor_columns": [
+      "unit_id",
+      "cycle",
+      "setting_1",
+      "setting_2",
+      "setting_3",
+      "sensor_1",
+      "sensor_2",
+      "sensor_3",
+      "sensor_4",
+      "sensor_5",
+      "sensor_6",
+      "sensor_7",
+      "sensor_8",
+      "sensor_9",
+      "sensor_10",
+      "sensor_11",
+      "sensor_12",
+      "sensor_13",
+      "sensor_14",
+      "sensor_15",
+      "sensor_16",
+      "sensor_17",
+      "sensor_18",
+      "sensor_19",
+      "sensor_20",
+      "sensor_21"
+    ]
+  }
+}

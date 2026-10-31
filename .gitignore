@@ -22,6 +22,7 @@ env/
 !/data/processed/
 /data/raw/*
 !/data/raw/.gitkeep
+!/data/raw/data_manifest.json
 /data/interim/*
 !/data/interim/.gitkeep
 /data/processed/*
