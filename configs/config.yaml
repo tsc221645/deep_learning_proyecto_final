@@ -16,6 +16,38 @@ split:
 window:
   size: 30
 
+training:
+  seeds:
+    - 42
+    - 43
+    - 44
+  max_epochs: 100
+  batch_size: 64
+  early_stopping:
+    monitor: validation_mae_cycles
+    patience: 10
+    min_delta_cycles: 0.0
+    restore_best_checkpoint: true
+  loss:
+    name: huber
+    delta_cycles: 1.0
+  optimizer:
+    name: adam
+    learning_rate: 0.001
+
+evaluation:
+  primary_metric: mae_cycles
+  validation_windows: all_complete_windows
+  test_policy: reserve_until_model_selection_is_complete
+  report_raw_predictions: true
+  latency_percentiles:
+    - 50
+    - 95
+
+baseline:
+  name: median_train_rul
+  target_source: training_window_labels
+
 features:
   include_cycle: true
   include_operating_settings: true

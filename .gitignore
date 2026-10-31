@@ -40,11 +40,14 @@ env/
 /artifacts/metrics/*
 !/artifacts/metrics/.gitkeep
 !/artifacts/metrics/eda_*.csv
+!/artifacts/metrics/baseline_*.csv
+!/artifacts/metrics/baseline_*.json
 /artifacts/figures/*
 !/artifacts/figures/.gitkeep
 !/artifacts/figures/eda_*.png
 /artifacts/experiments/*
 !/artifacts/experiments/.gitkeep
+!/artifacts/experiments/results.csv
 /artifacts/processed/*
 !/artifacts/processed/fd001/
 /artifacts/processed/fd001/*

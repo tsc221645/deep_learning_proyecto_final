@@ -83,3 +83,12 @@ conda activate dm1
 ```
 
 Los tensores y el escalador quedan en `artifacts/processed/fd001/`. Los IDs, hashes y la configuración quedan en el manifiesto. El reporte está en `docs/preprocessing_report.md`.
+
+## Fase 5: protocolo experimental y baseline
+
+```powershell
+conda activate dm1
+.\scripts\baseline.ps1
+```
+
+El protocolo queda en `docs/experimental_protocol.md`. El baseline usa la mediana de las etiquetas de entrenamiento y reporta métricas en validación. No carga ni evalúa el test oficial.
