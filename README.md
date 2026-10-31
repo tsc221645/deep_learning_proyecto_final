@@ -72,3 +72,14 @@ conda activate dm1
 ```
 
 El notebook `notebooks/01_eda.ipynb` permite revisar y volver a generar los resultados. El setup instala las dependencias de Jupyter en `dm1`.
+
+## Fase 4: particiones y preprocesamiento
+
+Separa motores completos de train para validación, ajusta el escalador solo con motores de ajuste, genera ventanas y conserva el test oficial reservado:
+
+```powershell
+conda activate dm1
+.\scripts\preprocess.ps1
+```
+
+Los tensores y el escalador quedan en `artifacts/processed/fd001/`. Los IDs, hashes y la configuración quedan en el manifiesto. El reporte está en `docs/preprocessing_report.md`.

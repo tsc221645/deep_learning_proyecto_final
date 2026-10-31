@@ -34,6 +34,7 @@ env/
 !/artifacts/metrics/
 !/artifacts/figures/
 !/artifacts/experiments/
+!/artifacts/processed/
 /artifacts/models/*
 !/artifacts/models/.gitkeep
 /artifacts/metrics/*
@@ -44,6 +45,12 @@ env/
 !/artifacts/figures/eda_*.png
 /artifacts/experiments/*
 !/artifacts/experiments/.gitkeep
+/artifacts/processed/*
+!/artifacts/processed/fd001/
+/artifacts/processed/fd001/*
+!/artifacts/processed/fd001/preprocessing_manifest.json
+!/artifacts/processed/fd001/train_unit_ids.json
+!/artifacts/processed/fd001/val_unit_ids.json
 PredictGuard_Plan_Desarrollo_Por_Fases.md
 # Frontend
 frontend/node_modules/

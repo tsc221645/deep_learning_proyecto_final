@@ -17,9 +17,16 @@ window:
   size: 30
 
 features:
+  include_cycle: true
   include_operating_settings: true
   sensors: all
   exclude_unit_id: true
+
+preprocessing:
+  output_root: artifacts/processed/fd001
+  constant_variance_threshold: 1.0e-12
+  drop_constant_sensors: true
+  train_window_stride: 1
 
 models:
   candidates:
