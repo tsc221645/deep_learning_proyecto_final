@@ -12,7 +12,7 @@ try {
         exit $LASTEXITCODE
     }
 
-    python -m pip install --no-user -e ".[dev]"
+    python -m pip install --no-user -e ".[dev,notebook]"
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

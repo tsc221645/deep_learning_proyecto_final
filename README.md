@@ -9,7 +9,7 @@ El mantenimiento no planificado de maquinaria puede generar costos elevados debi
 ## Fuente de datos
 NASA C-MAPSS (Commercial Modular Aero-Propulsion System Simulation): conjunto de datos público desarrollado por la NASA que contiene registros simulados de degradación de motores turbofán, incluyendo 21 variables de sensores, condiciones operativas y ciclos de funcionamiento. Se utilizará principalmente el subconjunto FD001, que contiene historiales de 100 motores para entrenamiento y 100 para evaluación, junto con valores de referencia de vida útil restante. Estos datos permiten entrenar y evaluar modelos de regresión para predecir el RUL.
 
-Fuente oficial: https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/ 
+Fuente oficial: https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/
 
 ## Problema de investigación
 ¿En qué medida una mejora en la precisión de la predicción de vida útil restante de motores aeronáuticos simulados permite reducir el costo esperado de las decisiones de mantenimiento?
@@ -61,3 +61,14 @@ conda activate dm1
 ```
 
 La validación genera `data/raw/data_manifest.json` con los hashes SHA-256, tamaños, conteos y procedencia. Los datos se mantienen fuera de Git; el manifiesto sí se versiona.
+
+## Fase 3: análisis exploratorio
+
+Genera las tablas, figuras y el reporte de EDA sin modificar los datos crudos:
+
+```powershell
+conda activate dm1
+.\scripts\eda.ps1
+```
+
+El notebook `notebooks/01_eda.ipynb` permite revisar y volver a generar los resultados. El setup instala las dependencias de Jupyter en `dm1`.

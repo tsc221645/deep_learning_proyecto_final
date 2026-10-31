@@ -38,8 +38,10 @@ env/
 !/artifacts/models/.gitkeep
 /artifacts/metrics/*
 !/artifacts/metrics/.gitkeep
+!/artifacts/metrics/eda_*.csv
 /artifacts/figures/*
 !/artifacts/figures/.gitkeep
+!/artifacts/figures/eda_*.png
 /artifacts/experiments/*
 !/artifacts/experiments/.gitkeep
 PredictGuard_Plan_Desarrollo_Por_Fases.md
