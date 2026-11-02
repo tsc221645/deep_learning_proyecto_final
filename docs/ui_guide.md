@@ -49,9 +49,19 @@ conceptual del turbofan para el mismo motor seleccionado.
   capas densas de 128 y 64 unidades del MLP, y el RUL predicho. También muestra
   la estimación LSTM, que procesa la secuencia temporal sin aplanarla.
 
-La forma del motor es conceptual y no representa un diseño exacto de NASA.
-C-MAPSS no especifica la ubicación física de cada canal de sensor. La interfaz
-no coloca sensores sobre el motor ni atribuye a un sensor un componente real.
+La forma del motor es conceptual: un turbofan de dos ejes de alta derivación
+(ventilador, LPC, HPC, combustión, HPT, LPT y tobera), el tipo de motor que
+simula C-MAPSS, y no representa un diseño exacto de NASA. Cada variable se
+asocia a la estación de medición descrita en la documentación del benchmark
+(Saxena et al., 2008), por ejemplo T30 en la salida del HPC. Es una asociación
+por sección del motor, no la posición física exacta de un sensor.
+
+La pantalla sigue el orden de lectura: ciclo de vida estimado (observado + RUL
+de cada modelo), modelo 3D con corte, despiece, flujo de aire y rotación, el
+sensor elegido y el flujo de entrada de cada modelo. Elegir una variable enfoca
+su componente en el 3D y viceversa. Los botones "Más urgente / Menos urgente"
+recorren la flota por RUL estimado. La URL (`#/engine/17`) permite compartir o
+recargar un motor concreto.
 
 El conjunto oficial solo proporciona una etiqueta RUL terminal por motor. Las
 estimaciones del detalle no muestran una etiqueta real como si existiera para

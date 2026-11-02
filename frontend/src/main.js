@@ -4,7 +4,6 @@ import '@fontsource/roboto/latin-400.css'
 import '@fontsource/roboto/latin-500.css'
 import '@fontsource/roboto/latin-700.css'
 import '@fontsource/roboto/latin-900.css'
-import './style.css'
-import './space-theme.css'
+import './theme.css'
 
 createApp(App).mount('#app')

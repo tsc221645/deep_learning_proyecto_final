@@ -1,254 +1,417 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+import { PARTS, PART_ORDER, SENSORS, sensorsOfPart, fmt, pad } from '../lib/engine.js'
 
 const props = defineProps({
   engineId: { type: Number, required: true },
   observedCycle: { type: Number, required: true },
-  mlpRul: { type: Number, default: null },
-  lstmRul: { type: Number, default: null },
   sensor: { type: String, default: 'sensor_11' },
-  sensorValue: { type: Number, default: null },
+  records: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['update:sensor'])
 
 const canvasHost = ref(null)
 const cutaway = ref(true)
-const selectedPart = ref('fan')
-const partNames = {
-  fan: 'Ventilador',
-  compressor: 'Compresor',
-  combustion: 'Cámara de combustión',
-  turbine: 'Turbina',
-  exhaust: 'Tobera de escape',
-  casing: 'Carcasa',
-}
-const detail = {
-  fan: 'Aumenta la presión y el flujo de aire que entra al motor.',
-  compressor: 'Comprime el aire antes de la combustión.',
-  combustion: 'Mezcla el aire comprimido con combustible y libera energía.',
-  turbine: 'Extrae energía de los gases para mover el compresor y el ventilador.',
-  exhaust: 'Acelera los gases para producir empuje.',
-  casing: 'Protege y contiene los componentes internos.',
-}
+const exploded = ref(false)
+const flow = ref(true)
+const spinning = ref(true)
+const selectedPart = ref(SENSORS[props.sensor]?.part ?? 'hpc')
+const hoverPart = ref(null)
 
-let renderer
-let scene
-let camera
-let controls
-let resizeObserver
-let frameId
-let engineGroup
-let casing
-let internalParts = []
-let raycaster
-let pointer
+// Seleccionar un sensor en otra parte de la pantalla enfoca su estación en el 3D.
+watch(() => props.sensor, key => {
+  const part = SENSORS[key]?.part
+  if (part) selectedPart.value = part
+})
 
-function addPart(geometry, material, position, part, parent = engineGroup) {
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.position.set(...position)
-  mesh.userData.part = part
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-  parent.add(mesh)
-  return mesh
-}
+const first = computed(() => props.records[0] ?? null)
+const last = computed(() => props.records[props.records.length - 1] ?? null)
+const stationSensors = computed(() => sensorsOfPart(selectedPart.value).map(key => {
+  const now = last.value ? Number(last.value[key]) : null
+  const start = first.value ? Number(first.value[key]) : null
+  return { key, ...SENSORS[key], now, delta: now !== null && start !== null ? now - start : null }
+}))
+const signed = value => (value > 0 ? '+' : '') + fmt(value, 3)
 
-function axialCylinder(radius, length, material, x, part, segments = 48) {
-  const mesh = addPart(
-    new THREE.CylinderGeometry(radius, radius, length, segments, 1, true),
-    material,
-    [x, 0, 0],
-    part,
-  )
-  mesh.rotation.z = Math.PI / 2
-  return mesh
-}
+// ---------------------------------------------------------------- escena ---
+// Eje del motor = X (admisión a la izquierda, escape a la derecha).
+let renderer, scene, camera, controls, raycaster, pointer, resizeObserver, frameId, clock
+let envTexture
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0)
+const partRoots = {}   // part -> { root, rotor, stator, center, spool, mats: [] }
+const spoolAngle = { lp: 0, hp: 0 }
+const baseEmissive = new WeakMap()
+let marker, flowPoints, flowState
+const disposables = []
+let downAt = null
+let dragging = false
 
-function axialRing(radius, tube, material, x, part) {
-  const mesh = addPart(
-    new THREE.TorusGeometry(radius, tube, 12, 64),
-    material,
-    [x, 0, 0],
-    part,
-  )
-  mesh.rotation.y = Math.PI / 2
-  return mesh
-}
-
-function addRotor(x, radius, bladeCount, part, material) {
-  const rotor = new THREE.Group()
-  rotor.position.x = x
-  rotor.userData.part = part
-  engineGroup.add(rotor)
-  addPart(
-    new THREE.CylinderGeometry(radius * 0.17, radius * 0.17, 0.12, 24),
-    material,
-    [0, 0, 0],
-    part,
-    rotor,
-  ).rotation.z = Math.PI / 2
-
-  const bladeShape = new THREE.Shape()
-  bladeShape.moveTo(-radius * 0.16, radius * 0.19)
-  bladeShape.bezierCurveTo(
-    -radius * 0.2, radius * 0.38,
-    -radius * 0.11, radius * 0.76,
-    -radius * 0.035, radius * 0.97,
-  )
-  bladeShape.bezierCurveTo(
-    radius * 0.035, radius * 1.03,
-    radius * 0.23, radius * 0.99,
-    radius * 0.27, radius * 0.93,
-  )
-  bladeShape.bezierCurveTo(
-    radius * 0.2, radius * 0.67,
-    radius * 0.4, radius * 0.36,
-    radius * 0.45, radius * 0.19,
-  )
-  bladeShape.closePath()
-  const bladeDepth = radius * 0.085
-  const bladeGeometry = new THREE.ExtrudeGeometry(bladeShape, {
-    depth: bladeDepth,
-    bevelEnabled: true,
-    bevelSegments: 2,
-    steps: 1,
-    bevelSize: radius * 0.018,
-    bevelThickness: radius * 0.018,
-    curveSegments: 8,
-  })
-  bladeGeometry.translate(0, 0, -bladeDepth / 2)
-
-  for (let index = 0; index < bladeCount; index += 1) {
-    const angle = (index * Math.PI * 2) / bladeCount
-    const blade = addPart(bladeGeometry, material, [0, 0, 0], part, rotor)
-    blade.rotation.x = angle
+const interp = (table, x) => {
+  if (x <= table[0][0]) return table[0][1]
+  for (let i = 1; i < table.length; i += 1) {
+    if (x <= table[i][0]) {
+      const [x0, y0] = table[i - 1]
+      const [x1, y1] = table[i]
+      return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0)
+    }
   }
-  return rotor
+  return table[table.length - 1][1]
+}
+
+// Perfiles (x, r) del motor. Todo el modelo se deriva de estas tablas.
+const NACELLE_OUT = [[-2.72, 0.96], [-2.66, 1.04], [-2.5, 1.1], [-2.15, 1.14], [-1.4, 1.14], [-0.5, 1.09], [0.4, 0.99], [0.95, 0.9]]
+const NACELLE_IN = [[0.95, 0.86], [0.4, 0.93], [-0.5, 1.02], [-1.4, 1.05], [-2.0, 1.03], [-2.5, 0.99], [-2.68, 0.975]]
+const COWL = [[-1.55, 0.44], [-1.45, 0.47], [-1.2, 0.49], [-0.5, 0.51], [0.4, 0.54], [1.2, 0.57], [1.9, 0.57], [2.3, 0.55], [2.7, 0.44], [3.0, 0.37]]
+
+function partRoot(part, spool = null) {
+  if (partRoots[part]) return partRoots[part]
+  const root = new THREE.Group()
+  const rotor = new THREE.Group()
+  const stator = new THREE.Group()
+  root.add(rotor, stator)
+  scene.add(root)
+  partRoots[part] = { root, rotor, stator, spool, mats: [], center: 0 }
+  return partRoots[part]
+}
+
+function material(part, color, options = {}) {
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    metalness: options.metalness ?? 0.85,
+    roughness: options.roughness ?? 0.32,
+    side: THREE.DoubleSide,
+    emissive: options.emissive ?? 0x000000,
+    emissiveIntensity: options.emissiveIntensity ?? 1,
+    transparent: options.opacity !== undefined,
+    opacity: options.opacity ?? 1,
+  })
+  baseEmissive.set(mat, { color: new THREE.Color(options.emissive ?? 0x000000), intensity: options.emissiveIntensity ?? 1 })
+  partRoots[part].mats.push(mat)
+  disposables.push(mat)
+  return mat
+}
+
+function tag(object, part) {
+  object.userData.part = part
+  return object
+}
+
+// Cuerpo de revolución alrededor del eje X a partir de pares (x, r).
+function lathe(points, segments = 96) {
+  const geometry = new THREE.LatheGeometry(points.map(([x, r]) => new THREE.Vector2(r, x)), segments)
+  geometry.rotateZ(-Math.PI / 2)
+  disposables.push(geometry)
+  return geometry
+}
+
+const smooth = (table, divisions = 8) => {
+  const curve = new THREE.CatmullRomCurve3(table.map(([x, r]) => new THREE.Vector3(x, r, 0)), false, 'centripetal')
+  return curve.getPoints(table.length * divisions).map(p => [p.x, p.y])
+}
+
+function shell(part, points, color, options = {}) {
+  const { stator } = partRoots[part]
+  const mesh = tag(new THREE.Mesh(lathe(points), material(part, color, options)), part)
+  stator.add(mesh)
+  return mesh
+}
+
+function cone(part, x0, x1, r0, r1, color, group = 'stator', options = {}) {
+  const geometry = lathe([[x0, r0], [x1, r1]], 64)
+  const mesh = tag(new THREE.Mesh(geometry, material(part, color, options)), part)
+  partRoots[part][group].add(mesh)
+  return mesh
+}
+
+// Álabe genérico con barrido y ensanche hacia la punta; se instancia por fila.
+let bladeGeometry
+function getBladeGeometry() {
+  if (bladeGeometry) return bladeGeometry
+  const shape = new THREE.Shape()
+  shape.moveTo(-0.34, 0)
+  shape.lineTo(0.34, 0)
+  shape.bezierCurveTo(0.42, 0.35, 0.56, 0.75, 0.6, 1)
+  shape.bezierCurveTo(0.3, 1.02, -0.1, 0.98, -0.28, 0.9)
+  shape.bezierCurveTo(-0.4, 0.6, -0.4, 0.3, -0.34, 0)
+  bladeGeometry = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 6 })
+  bladeGeometry.translate(0, 0, -0.5)
+  disposables.push(bladeGeometry)
+  return bladeGeometry
+}
+
+const m4 = {
+  rx: new THREE.Matrix4(), t: new THREE.Matrix4(), ry: new THREE.Matrix4(),
+  ty: new THREE.Matrix4(), s: new THREE.Matrix4(), out: new THREE.Matrix4(),
+}
+
+// Una fila de álabes: `r0`→`r1` puede variar por fila para estrechar el canal.
+function bladeRow(part, group, { x, count, r0, r1, chord, thick, stagger, color, offset = 0, options = {} }) {
+  const mesh = tag(new THREE.InstancedMesh(getBladeGeometry(), material(part, color, options), count), part)
+  for (let i = 0; i < count; i += 1) {
+    const angle = ((i + offset) / count) * Math.PI * 2
+    m4.rx.makeRotationX(angle)
+    m4.t.makeTranslation(x, 0, 0)
+    m4.ry.makeRotationY(stagger)
+    m4.ty.makeTranslation(0, r0, 0)
+    m4.s.makeScale(chord, r1 - r0, thick)
+    m4.out.copy(m4.rx).multiply(m4.t).multiply(m4.ry).multiply(m4.ty).multiply(m4.s)
+    mesh.setMatrixAt(i, m4.out)
+  }
+  mesh.instanceMatrix.needsUpdate = true
+  mesh.frustumCulled = false
+  partRoots[part][group].add(mesh)
+  return mesh
 }
 
 function buildEngine() {
-  engineGroup = new THREE.Group()
-  scene.add(engineGroup)
-  internalParts = []
-
-  const metal = new THREE.MeshStandardMaterial({
-    color: 0x7d91a4,
-    metalness: 0.78,
-    roughness: 0.28,
+  const metals = {
+    titanium: 0xd5dde3, steel: 0x9fb1bf, vane: 0x607485, hot: 0xcaa46a, bronze: 0xa99c88,
+    case: 0x2f4255, nacelle: 0xc6d0d8, dark: 0x1b2937,
+  }
+  ;['nacelle', 'fan', 'bypass', 'lpc', 'hpc', 'combustor', 'hpt', 'lpt', 'nozzle'].forEach(part => {
+    partRoot(part, { fan: 'lp', lpc: 'lp', lpt: 'lp', hpc: 'hp', hpt: 'hp' }[part] ?? null)
   })
-  const brightMetal = new THREE.MeshStandardMaterial({
-    color: 0xc3d1db,
-    metalness: 0.82,
-    roughness: 0.22,
-  })
-  const warmMetal = new THREE.MeshStandardMaterial({
-    color: 0xd98242,
-    metalness: 0.5,
-    roughness: 0.34,
-    emissive: 0x421900,
-  })
-  const darkMetal = new THREE.MeshStandardMaterial({
-    color: 0x25394b,
-    metalness: 0.72,
-    roughness: 0.31,
-  })
+  const centers = { nacelle: -0.9, fan: -2.1, bypass: -0.6, lpc: -1.15, hpc: -0.2, combustor: 0.7, hpt: 1.3, lpt: 2.0, nozzle: 2.9 }
+  Object.entries(centers).forEach(([part, x]) => { partRoots[part].center = x })
 
-  casing = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.82, 1.05, 4.65, 64, 1, false),
-    new THREE.MeshPhysicalMaterial({
-      color: 0x4c7489,
-      metalness: 0.46,
-      roughness: 0.28,
-      transparent: true,
-      opacity: 0.88,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  )
-  casing.rotation.z = Math.PI / 2
-  casing.userData.part = 'casing'
-  casing.renderOrder = 2
-  engineGroup.add(casing)
+  // Góndola: labio de entrada, cuerpo y borde de fuga; más un pilón de sujeción.
+  const nacelle = [...smooth(NACELLE_OUT, 10), ...smooth(NACELLE_IN, 10)]
+  nacelle.push(nacelle[0])
+  shell('nacelle', nacelle, metals.nacelle, { metalness: 0.55, roughness: 0.38 })
+  const pylon = tag(new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.36, 0.08), material('nacelle', metals.nacelle, { metalness: 0.5, roughness: 0.45 })), 'nacelle')
+  disposables.push(pylon.geometry)
+  pylon.position.set(-0.3, 1.2, 0)
+  partRoots.nacelle.stator.add(pylon)
 
-  const core = axialCylinder(0.28, 4.55, darkMetal, 0.12, 'turbine')
-  internalParts.push(core)
-  const coreNose = addPart(
-    new THREE.ConeGeometry(0.39, 0.78, 48),
-    brightMetal,
-    [-2.2, 0, 0],
-    'fan',
-  )
-  coreNose.rotation.z = Math.PI / 2
-  internalParts.push(coreNose)
-  axialRing(1.01, 0.055, brightMetal, -2.25, 'fan')
-  axialRing(0.77, 0.05, metal, 2.25, 'exhaust')
+  // Ventilador: cono (spinner), disco y álabes anchos.
+  const spinner = []
+  for (let i = 0; i <= 14; i += 1) {
+    const t = i / 14
+    spinner.push([-2.74 + t * 0.78, 0.34 * Math.sin((t * Math.PI) / 2) ** 0.85])
+  }
+  const spinnerMesh = tag(new THREE.Mesh(lathe(spinner, 64), material('fan', metals.titanium, { metalness: 0.9, roughness: 0.2 })), 'fan')
+  partRoots.fan.rotor.add(spinnerMesh)
+  cone('fan', -2.1, -1.88, 0.33, 0.3, metals.steel, 'rotor')
+  bladeRow('fan', 'rotor', { x: -2.0, count: 22, r0: 0.3, r1: 1.0, chord: 0.46, thick: 0.03, stagger: 1.0, color: metals.titanium, options: { roughness: 0.22 } })
 
-  const fan = addRotor(-2.05, 0.9, 20, 'fan', brightMetal)
-  internalParts.push(fan)
-  for (let stage = 0; stage < 4; stage += 1) {
-    const x = -1.35 + stage * 0.48
-    const radius = 0.72 - stage * 0.045
-    const rotor = addRotor(x, radius, 14, 'compressor', metal)
-    internalParts.push(rotor)
-    internalParts.push(axialRing(radius, 0.022, brightMetal, x, 'compressor'))
+  // Guías de salida del ventilador y borde de ataque del divisor de flujo.
+  bladeRow('bypass', 'stator', { x: -1.15, count: 40, r0: 0.5, r1: 1.04, chord: 0.2, thick: 0.02, stagger: -0.35, color: metals.vane })
+  shell('bypass', smooth(COWL.filter(p => p[0] <= 1.95), 8), metals.case, { metalness: 0.7, roughness: 0.42 })
+
+  // Compresor de baja presión (booster): 3 etapas.
+  cone('lpc', -1.5, -0.85, 0.25, 0.28, metals.dark, 'rotor')
+  for (let i = 0; i < 3; i += 1) {
+    const x = -1.38 + i * 0.2
+    bladeRow('lpc', 'rotor', { x, count: 46, r0: 0.26, r1: 0.43, chord: 0.12, thick: 0.014, stagger: 0.95, color: metals.titanium })
+    bladeRow('lpc', 'stator', { x: x + 0.1, count: 46, r0: 0.27, r1: 0.44, chord: 0.1, thick: 0.012, stagger: -0.95, color: metals.vane })
+  }
+  cone('lpc', -1.5, -0.78, 0.46, 0.45, metals.case, 'stator', { opacity: 0.9 })
+
+  // Compresor de alta presión: 9 etapas con canal que se estrecha.
+  cone('hpc', -0.75, 0.32, 0.2, 0.35, metals.dark, 'rotor')
+  for (let i = 0; i < 9; i += 1) {
+    const x = -0.68 + i * 0.12
+    const hub = 0.21 + (i / 8) * 0.13
+    const tip = 0.415 - (i / 8) * 0.02
+    bladeRow('hpc', 'rotor', { x, count: 58, r0: hub, r1: tip, chord: 0.085, thick: 0.011, stagger: 0.9, color: metals.steel })
+    bladeRow('hpc', 'stator', { x: x + 0.06, count: 58, r0: hub + 0.01, r1: tip + 0.01, chord: 0.075, thick: 0.01, stagger: -0.9, color: metals.vane })
+  }
+  cone('hpc', -0.78, 0.34, 0.425, 0.395, metals.case, 'stator', { opacity: 0.9 })
+
+  // Cámara de combustión anular: carcasa, tubo de llama incandescente e inyectores.
+  cone('combustor', 0.32, 1.12, 0.2, 0.22, metals.dark, 'rotor')
+  cone('combustor', 0.3, 1.12, 0.47, 0.45, metals.case, 'stator', { opacity: 0.9 })
+  const liner = [[1.1, 0.27], [0.62, 0.27], [0.5, 0.29], [0.44, 0.33], [0.5, 0.375], [0.62, 0.39], [1.1, 0.39]]
+  shell('combustor', smooth(liner, 6), 0xff7a2f, {
+    metalness: 0.2, roughness: 0.5, emissive: 0xff5a1a, emissiveIntensity: 1.6,
+  })
+  for (let i = 0; i < 16; i += 1) {
+    const angle = (i / 16) * Math.PI * 2
+    const injector = tag(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 0.14, 10), material('combustor', metals.hot)), 'combustor')
+    disposables.push(injector.geometry)
+    injector.rotation.z = Math.PI / 2
+    injector.position.set(0.4, Math.cos(angle) * 0.34, Math.sin(angle) * 0.34)
+    partRoots.combustor.stator.add(injector)
   }
 
-  const combustion = axialRing(0.54, 0.12, warmMetal, 0.72, 'combustion')
-  internalParts.push(combustion)
-  for (let index = 0; index < 8; index += 1) {
-    const angle = (index * Math.PI * 2) / 8
-    const injector = addPart(
-      new THREE.CylinderGeometry(0.035, 0.035, 0.42, 10),
-      warmMetal,
-      [0.72, Math.cos(angle) * 0.52, Math.sin(angle) * 0.52],
-      'combustion',
-    )
-    injector.rotation.x = angle
-    internalParts.push(injector)
+  // Turbina de alta presión: 2 etapas con álabes guía previos.
+  cone('hpt', 1.1, 1.5, 0.25, 0.27, metals.dark, 'rotor')
+  for (let i = 0; i < 2; i += 1) {
+    const x = 1.26 + i * 0.2
+    bladeRow('hpt', 'stator', { x: x - 0.09, count: 38, r0: 0.26 + i * 0.01, r1: 0.4 + i * 0.01, chord: 0.1, thick: 0.02, stagger: -1.0, color: metals.vane })
+    bladeRow('hpt', 'rotor', { x, count: 44, r0: 0.26 + i * 0.01, r1: 0.405 + i * 0.015, chord: 0.1, thick: 0.018, stagger: 0.9, color: metals.hot, options: { roughness: 0.4 } })
   }
+  cone('hpt', 1.1, 1.52, 0.44, 0.45, metals.case, 'stator', { opacity: 0.9 })
 
-  for (let stage = 0; stage < 3; stage += 1) {
-    const x = 1.15 + stage * 0.36
-    const radius = 0.62 - stage * 0.065
-    const rotor = addRotor(x, radius, 12, 'turbine', brightMetal)
-    internalParts.push(rotor)
+  // Turbina de baja presión: 4 etapas con canal que se ensancha.
+  cone('lpt', 1.55, 2.4, 0.28, 0.32, metals.dark, 'rotor')
+  for (let i = 0; i < 4; i += 1) {
+    const x = 1.68 + i * 0.2
+    const hub = 0.285 + i * 0.012
+    const tip = 0.46 + i * 0.03
+    bladeRow('lpt', 'stator', { x: x - 0.09, count: 56, r0: hub, r1: tip, chord: 0.1, thick: 0.02, stagger: -0.9, color: metals.vane })
+    bladeRow('lpt', 'rotor', { x, count: 64, r0: hub, r1: tip + 0.01, chord: 0.11, thick: 0.018, stagger: 0.85, color: metals.bronze })
   }
+  cone('lpt', 1.52, 2.45, 0.465, 0.56, metals.case, 'stator', { opacity: 0.9 })
 
-  const nozzle = addPart(
-    new THREE.CylinderGeometry(0.35, 0.57, 0.78, 48, 1, true),
-    metal,
-    [2.28, 0, 0],
-    'exhaust',
+  // Tobera del núcleo y cono de escape.
+  shell('nozzle', smooth(COWL.filter(p => p[0] >= 1.9), 8), metals.case, { metalness: 0.7, roughness: 0.4 })
+  const plug = smooth([[2.4, 0.32], [2.7, 0.29], [3.05, 0.2], [3.35, 0.08], [3.52, 0]], 8)
+  shell('nozzle', plug, metals.titanium, { metalness: 0.88, roughness: 0.28 })
+
+  // Marcador de estación (anillo) para el componente seleccionado.
+  marker = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.012, 10, 96),
+    new THREE.MeshBasicMaterial({ color: 0x5eead4, transparent: true, opacity: 0.9, depthTest: false }),
   )
-  nozzle.rotation.z = Math.PI / 2
-  internalParts.push(nozzle)
+  marker.rotation.y = Math.PI / 2
+  marker.renderOrder = 10
+  disposables.push(marker.geometry, marker.material)
+  scene.add(marker)
+
+  // Partículas de aire: azul en derivación y compresión, naranja tras la combustión.
+  const count = 900
+  flowState = Array.from({ length: count }, (_, i) => ({
+    lane: i % 3 === 0 ? 'core' : 'bypass', x: -3.2 + Math.random() * 6.8,
+    theta: Math.random() * Math.PI * 2, k: Math.random(), speed: 0.7 + Math.random() * 0.8,
+  }))
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3))
+  flowPoints = new THREE.Points(geometry, new THREE.PointsMaterial({
+    size: 0.03, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, sizeAttenuation: true,
+  }))
+  flowPoints.frustumCulled = false
+  disposables.push(geometry, flowPoints.material)
+  scene.add(flowPoints)
+  updateFlow(0)
+  refreshHighlight()
+  applyLayout()
 }
 
-function setCutaway(value) {
-  cutaway.value = value
-  casing.material.transparent = value
-  casing.material.opacity = value ? 0.17 : 0.9
-  casing.material.color.set(value ? 0x73c7bd : 0x527387)
-  internalParts.forEach(part => {
-    part.visible = value
+const BLUE = new THREE.Color(0x7fd3ff)
+const HOT = new THREE.Color(0xffa24a)
+const EMBER = new THREE.Color(0xff6a3a)
+const tmpColor = new THREE.Color()
+
+function updateFlow(dt) {
+  if (!flowPoints) return
+  const pos = flowPoints.geometry.attributes.position
+  const col = flowPoints.geometry.attributes.color
+  flowState.forEach((p, i) => {
+    p.x += dt * p.speed * (p.lane === 'core' && p.x > 0.5 ? 1.5 : 1)
+    if (p.x > 3.6) { p.x = -3.2; p.theta = Math.random() * Math.PI * 2 }
+    let r
+    if (p.lane === 'bypass') {
+      const outer = p.x < 0.95 ? interp(NACELLE_IN.slice().reverse(), p.x) : 0.78
+      const inner = interp(COWL, p.x) + 0.01
+      r = p.x < -2.6 ? 0.2 + p.k * 0.7 : inner + p.k * Math.max(0.05, outer - inner - 0.02)
+      if (p.x > 0.95) r = inner + p.k * 0.2 + (p.x - 0.95) * 0.08
+    } else {
+      const hub = p.x < -1.5 ? 0.15 : p.x < 0.3 ? 0.24 + ((p.x + 0.7) / 1.0) * 0.1 : 0.27
+      const tip = p.x < -1.5 ? 0.42 : p.x < 0.3 ? 0.4 : p.x < 1.5 ? 0.4 : 0.42 + (p.x - 1.5) * 0.1
+      r = p.x > 2.4 ? interp([[2.4, 0.3], [3.0, 0.3], [3.5, 0.06]], p.x) + p.k * 0.2 : hub + p.k * (tip - hub)
+    }
+    pos.setXYZ(i, p.x, Math.cos(p.theta) * r, Math.sin(p.theta) * r)
+    if (p.lane === 'bypass') tmpColor.copy(BLUE)
+    else if (p.x < 0.45) tmpColor.copy(BLUE).lerp(HOT, Math.max(0, (p.x + 0.6) / 1.5))
+    else if (p.x < 1.1) tmpColor.copy(HOT)
+    else tmpColor.copy(HOT).lerp(EMBER, Math.min(1, (p.x - 1.1) / 1.5))
+    col.setXYZ(i, tmpColor.r, tmpColor.g, tmpColor.b)
   })
+  pos.needsUpdate = true
+  col.needsUpdate = true
+}
+
+function refreshHighlight() {
+  Object.entries(partRoots).forEach(([part, entry]) => {
+    const active = part === selectedPart.value
+    const hovered = part === hoverPart.value && !active
+    entry.mats.forEach(mat => {
+      const base = baseEmissive.get(mat)
+      if (active) {
+        mat.emissive.set(0x1fbfa8)
+        mat.emissiveIntensity = base.intensity > 1 ? 1.6 : 0.5
+      } else if (hovered) {
+        mat.emissive.set(0x1a6f9e)
+        mat.emissiveIntensity = 0.45
+      } else {
+        mat.emissive.copy(base.color)
+        mat.emissiveIntensity = base.intensity
+      }
+    })
+  })
+  const entry = partRoots[selectedPart.value]
+  if (entry && marker) {
+    const radius = { nacelle: 1.18, fan: 1.05, bypass: 0.62, lpc: 0.5, hpc: 0.47, combustor: 0.5, hpt: 0.47, lpt: 0.6, nozzle: 0.5 }[selectedPart.value]
+    marker.scale.setScalar(radius)
+    marker.userData.x = entry.center
+    marker.position.x = entry.center + entry.root.position.x
+  }
+}
+
+function applyLayout() {
+  const spread = exploded.value ? 0.55 : 0
+  Object.values(partRoots).forEach(entry => {
+    entry.root.position.x = (entry.center - 0.4) * spread
+  })
+  if (marker) marker.position.x = (marker.userData.x ?? 0) + (partRoots[selectedPart.value]?.root.position.x ?? 0)
+}
+
+function applyView() {
+  renderer.clippingPlanes = cutaway.value ? [cutPlane] : []
 }
 
 function selectPart(part) {
-  if (partNames[part]) selectedPart.value = part
+  if (!PARTS[part]) return
+  selectedPart.value = part
+  const own = sensorsOfPart(part)
+  if (own.length && SENSORS[props.sensor]?.part !== part) emit('update:sensor', own[0])
 }
 
-function onPointerClick(event) {
+function pick(event) {
   const bounds = renderer.domElement.getBoundingClientRect()
-  pointer.set(
-    ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
-    -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
-  )
+  pointer.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1)
   raycaster.setFromCamera(pointer, camera)
-  const hit = raycaster.intersectObjects(engineGroup.children, true)
-    .find(item => item.object.visible && item.object.userData.part)
-  if (hit) selectPart(hit.object.userData.part)
+  const targets = Object.values(partRoots).map(entry => entry.root)
+  const hit = raycaster.intersectObjects(targets, true).find(item => {
+    if (!item.object.userData.part) return false
+    // El plano de corte oculta la mitad delantera: no se puede seleccionar lo recortado.
+    return !cutaway.value || item.point.z <= 0.001
+  })
+  return hit ? hit.object.userData.part : null
+}
+
+function onPointerDown(event) {
+  downAt = { x: event.clientX, y: event.clientY }
+  dragging = false
+}
+function onPointerMove(event) {
+  if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 5) dragging = true
+  if (!downAt) {
+    const part = pick(event)
+    if (part !== hoverPart.value) {
+      hoverPart.value = part
+      refreshHighlight()
+    }
+  }
+}
+function onPointerUp(event) {
+  if (downAt && !dragging) {
+    const part = pick(event)
+    if (part) selectPart(part)
+  }
+  downAt = null
+}
+function onPointerLeave() {
+  downAt = null
+  if (hoverPart.value) {
+    hoverPart.value = null
+    refreshHighlight()
+  }
 }
 
 function onResize() {
@@ -262,67 +425,82 @@ function onResize() {
 
 function animate() {
   frameId = requestAnimationFrame(animate)
-  controls?.update()
-  renderer?.render(scene, camera)
+  const dt = Math.min(clock.getDelta(), 0.05)
+  if (spinning.value) {
+    spoolAngle.lp += dt * 1.6
+    spoolAngle.hp += dt * 3.1
+    Object.values(partRoots).forEach(entry => {
+      if (entry.spool) entry.rotor.rotation.x = spoolAngle[entry.spool]
+    })
+  }
+  flowPoints.visible = flow.value
+  if (flow.value) updateFlow(dt)
+  marker.material.opacity = 0.55 + 0.4 * Math.sin(clock.elapsedTime * 3)
+  controls.update()
+  renderer.render(scene, camera)
 }
 
+const HOME = { position: [-2.4, 1.7, 5.3], target: [0.1, 0, 0] }
 function resetView() {
-  if (!camera || !controls) return
-  camera.position.set(4.4, 3.6, 6.3)
-  controls.target.set(0, 0, 0)
+  camera.position.set(...HOME.position)
+  controls.target.set(...HOME.target)
   controls.update()
 }
 
-watch(cutaway, value => setCutaway(value))
+watch([selectedPart, hoverPart], refreshHighlight)
+watch(exploded, applyLayout)
+watch(cutaway, () => renderer && applyView())
 
 onMounted(() => {
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x0b1725)
-  camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100)
-  camera.position.set(4.4, 3.6, 6.3)
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+  clock = new THREE.Clock()
+  camera = new THREE.PerspectiveCamera(34, 1, 0.1, 60)
+  renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.1
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
-  renderer.domElement.setAttribute('aria-label', 'Modelo 3D interactivo de un turbofan')
-  renderer.domElement.addEventListener('click', onPointerClick)
+  renderer.toneMappingExposure = 1.05
+  renderer.setClearColor(0x08131f, 1)
+  renderer.domElement.setAttribute('aria-label', 'Modelo 3D interactivo de un turbofan de dos ejes')
+  renderer.domElement.addEventListener('pointerdown', onPointerDown)
+  renderer.domElement.addEventListener('pointermove', onPointerMove)
+  renderer.domElement.addEventListener('pointerup', onPointerUp)
+  renderer.domElement.addEventListener('pointerleave', onPointerLeave)
   canvasHost.value.appendChild(renderer.domElement)
+
+  const pmrem = new THREE.PMREMGenerator(renderer)
+  envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+  scene.environment = envTexture
+  scene.environmentIntensity = 0.9
+  pmrem.dispose()
 
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
-  controls.dampingFactor = 0.07
-  controls.minDistance = 3.2
-  controls.maxDistance = 11
-  controls.target.set(0, 0, 0)
+  controls.dampingFactor = 0.08
+  controls.minDistance = 2.5
+  controls.maxDistance = 14
+  controls.maxPolarAngle = Math.PI * 0.92
 
-  scene.add(new THREE.HemisphereLight(0xe5f4ff, 0x687a83, 2.1))
-  const keyLight = new THREE.DirectionalLight(0xffffff, 3.4)
-  keyLight.position.set(-3, 5, 6)
-  keyLight.castShadow = true
-  scene.add(keyLight)
-  const fillLight = new THREE.DirectionalLight(0x6fd8cb, 1.6)
-  fillLight.position.set(2, 1, -5)
-  scene.add(fillLight)
+  scene.add(new THREE.HemisphereLight(0xdcefff, 0x1b2a38, 0.9))
+  const key = new THREE.DirectionalLight(0xffffff, 2.2)
+  key.position.set(-3, 5, 6)
+  scene.add(key)
+  const rim = new THREE.DirectionalLight(0x5eead4, 1.1)
+  rim.position.set(4, 2, -5)
+  scene.add(rim)
+  const glow = new THREE.PointLight(0xff7a2f, 6, 3.2)
+  glow.position.set(0.75, 0, 0)
+  scene.add(glow)
 
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshStandardMaterial({ color: 0x0b1725, roughness: 1 }),
-  )
-  floor.rotation.x = -Math.PI / 2
-  floor.position.y = -1.18
-  floor.receiveShadow = true
-  scene.add(floor)
-  const grid = new THREE.GridHelper(12, 24, 0x3e7180, 0x20384b)
-  grid.position.y = -1.17
+  const grid = new THREE.GridHelper(16, 32, 0x2f5a6a, 0x16293a)
+  grid.position.y = -1.45
   scene.add(grid)
 
   raycaster = new THREE.Raycaster()
   pointer = new THREE.Vector2()
   buildEngine()
-  setCutaway(cutaway.value)
+  applyView()
+  resetView()
   resizeObserver = new ResizeObserver(onResize)
   resizeObserver.observe(canvasHost.value)
   onResize()
@@ -333,104 +511,120 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(frameId)
   resizeObserver?.disconnect()
   controls?.dispose()
+  disposables.forEach(item => item.dispose?.())
+  disposables.length = 0
+  envTexture?.dispose()
   if (renderer) {
-    renderer.domElement.removeEventListener('click', onPointerClick)
+    const canvas = renderer.domElement
+    canvas.removeEventListener('pointerdown', onPointerDown)
+    canvas.removeEventListener('pointermove', onPointerMove)
+    canvas.removeEventListener('pointerup', onPointerUp)
+    canvas.removeEventListener('pointerleave', onPointerLeave)
     renderer.dispose()
-    renderer.domElement.remove()
+    canvas.remove()
   }
-  scene?.traverse(object => {
-    object.geometry?.dispose()
-    if (Array.isArray(object.material)) {
-      object.material.forEach(material => material.dispose())
-    } else {
-      object.material?.dispose()
-    }
-  })
+  Object.keys(partRoots).forEach(key => delete partRoots[key])
 })
 </script>
 
 <template>
-  <div class="turbofan-visual">
-    <div class="turbofan-toolbar">
-      <div class="view-toggle" role="group" aria-label="Vista del turbofan">
-        <button :class="{ active: cutaway }" @click="setCutaway(true)">Corte interno</button>
-        <button :class="{ active: !cutaway }" @click="setCutaway(false)">Exterior</button>
+  <div class="tf">
+    <div class="tf-toolbar">
+      <div class="seg" role="group" aria-label="Tipo de vista">
+        <button :class="{ on: cutaway }" @click="cutaway = true">Corte</button>
+        <button :class="{ on: !cutaway }" @click="cutaway = false">Exterior</button>
       </div>
-      <button class="camera-reset" @click="resetView" aria-label="Restablecer cámara">↺ <span>Restablecer vista</span></button>
+      <div class="tf-toggles">
+        <button :class="['chip-toggle', { on: exploded }]" :aria-pressed="exploded" @click="exploded = !exploded">Despiece</button>
+        <button :class="['chip-toggle', { on: flow }]" :aria-pressed="flow" @click="flow = !flow">Flujo de aire</button>
+        <button :class="['chip-toggle', { on: spinning }]" :aria-pressed="spinning" @click="spinning = !spinning">Rotación</button>
+        <button class="chip-toggle" @click="resetView">↺ Vista</button>
+      </div>
     </div>
-    <div ref="canvasHost" class="turbofan-canvas"></div>
-    <div class="canvas-hint">Arrastra para rotar · rueda para acercar · clic en una sección para explorar</div>
-    <div class="engine-overlay">
-      <span class="overlay-dot"></span>
-      MOTOR #{{ String(engineId).padStart(3, '0') }}
-      <span class="overlay-separator"></span>
-      CICLO {{ observedCycle }}
-    </div>
-    <aside class="part-card">
-      <span class="part-kicker">COMPONENTE</span>
-      <strong>{{ partNames[selectedPart] }}</strong>
-      <p>{{ detail[selectedPart] }}</p>
-    </aside>
-  </div>
 
-  <div class="model-explainer">
-    <div class="model-flow-heading">
-      <div>
-        <span class="part-kicker">DEL SENSOR A LA PREDICCIÓN</span>
-        <h3>Cómo estima la vida útil</h3>
+    <div class="tf-stage">
+      <div ref="canvasHost" class="tf-canvas"></div>
+      <div class="tf-overlay"><span class="dot"></span>MOTOR #{{ pad(engineId) }}<i></i>CICLO {{ observedCycle }}</div>
+      <div class="tf-hover" v-if="hoverPart">{{ PARTS[hoverPart].name }}</div>
+      <div class="tf-legend" aria-hidden="true">
+        <span><b class="sw cool"></b>Aire frío</span><span><b class="sw hot"></b>Gases calientes</span>
+        <span><b class="sw lp"></b>Eje LP: fan · LPC · LPT</span><span><b class="sw hp"></b>Eje HP: HPC · HPT</span>
       </div>
-      <span class="model-chip">MLP · motor seleccionado</span>
+      <div class="tf-hint">Arrastra para girar · rueda para acercar · clic en un componente</div>
     </div>
-    <div class="flow-steps" aria-label="Flujo de inferencia MLP">
-      <div class="flow-step"><span class="flow-icon">▤</span><strong>Ventana temporal</strong><small>30 ciclos × 19 señales</small></div>
-      <span class="flow-arrow" aria-hidden="true">→</span>
-      <div class="flow-step network-step"><span class="network-nodes"><i v-for="node in 7" :key="node"></i></span><strong>Capa densa</strong><small>128 neuronas · ReLU</small></div>
-      <span class="flow-arrow" aria-hidden="true">→</span>
-      <div class="flow-step network-step"><span class="network-nodes compact-nodes"><i v-for="node in 5" :key="node"></i></span><strong>Capa densa</strong><small>64 neuronas · ReLU</small></div>
-      <span class="flow-arrow" aria-hidden="true">→</span>
-      <div class="flow-step prediction-step"><span class="flow-value">{{ mlpRul === null ? '—' : `${Number(mlpRul).toFixed(1)}` }}</span><strong>RUL predicho</strong><small>ciclos restantes</small></div>
+
+    <div class="tf-parts" role="tablist" aria-label="Componentes del turbofan">
+      <button v-for="part in PART_ORDER" :key="part" role="tab" :aria-selected="selectedPart === part"
+        :class="{ on: selectedPart === part }" @click="selectPart(part)">{{ PARTS[part].short }}</button>
     </div>
-    <div class="sensor-context">
-      <span class="sensor-mark">⌁</span>
-      <span><strong>{{ sensor }}</strong><small>Lectura más reciente: {{ sensorValue === null ? 'sin dato' : Number(sensorValue).toFixed(3) }}</small></span>
-      <span class="sensor-disclaimer">Señal observada; su ubicación física no se especifica en C-MAPSS.</span>
+
+    <div class="tf-detail">
+      <div>
+        <span class="kicker">COMPONENTE SELECCIONADO</span>
+        <h3>{{ PARTS[selectedPart].name }}</h3>
+        <p>{{ PARTS[selectedPart].desc }}</p>
+      </div>
+      <div class="tf-stations">
+        <span class="kicker">VARIABLES C-MAPSS MEDIDAS EN ESTA ESTACIÓN</span>
+        <div v-if="stationSensors.length" class="station-list">
+          <button v-for="item in stationSensors" :key="item.key" :class="['station', { on: item.key === sensor }]"
+            @click="emit('update:sensor', item.key)">
+            <b>{{ item.code }}</b>
+            <span>{{ item.name }}</span>
+            <em>{{ item.now === null ? '—' : fmt(item.now, 3) }} {{ item.unit }}
+              <small v-if="item.delta !== null">{{ signed(item.delta) }} desde el ciclo 1</small></em>
+          </button>
+        </div>
+        <p v-else class="muted">C-MAPSS no incluye variables de este componente entre las señales del modelo.</p>
+      </div>
     </div>
-    <div class="other-model">La LSTM estima <strong>{{ lstmRul === null ? '—' : `${Number(lstmRul).toFixed(1)} ciclos` }}</strong> procesando la misma secuencia sin aplanarla.</div>
   </div>
 </template>
 
 <style scoped>
-.turbofan-visual{position:relative;overflow:hidden;border:1px solid #dfe9ed;border-radius:12px;background:#f1f6f8}.turbofan-toolbar{position:absolute;z-index:2;top:14px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:center}.view-toggle{display:flex;padding:3px;background:#fff;border:1px solid #dce7ea;border-radius:9px;box-shadow:0 2px 10px #18394a0d}.view-toggle button,.camera-reset{border:0;background:transparent;color:#63788a;border-radius:7px;padding:8px 11px;font-size:11px;font-weight:700}.view-toggle button.active{background:#e2f5f1;color:#0d9c88}.camera-reset{background:#fff;border:1px solid #dce7ea;box-shadow:0 2px 10px #18394a0d}.camera-reset span{margin-left:4px}.turbofan-canvas{height:420px;touch-action:none}.turbofan-canvas :deep(canvas){display:block;width:100%;height:100%;outline:none}.canvas-hint{position:absolute;bottom:13px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#788b98;font-size:10px;background:#ffffffc9;border-radius:30px;padding:7px 12px}.engine-overlay{position:absolute;top:70px;left:19px;display:flex;align-items:center;gap:7px;color:#597080;font-size:9px;font-weight:800;letter-spacing:1px}.overlay-dot{width:7px;height:7px;background:#18b79f;border-radius:50%;box-shadow:0 0 0 3px #18b79f24}.overlay-separator{height:12px;width:1px;background:#c9d6db;margin:0 3px}.part-card{position:absolute;right:15px;bottom:47px;width:190px;padding:13px 15px;border:1px solid #dce7e9;border-radius:10px;background:#fffffff0;box-shadow:0 5px 20px #173a4a12}.part-kicker{display:block;color:#14a18c;font-size:9px;font-weight:800;letter-spacing:1.3px}.part-card strong{display:block;margin-top:5px;color:#20384a;font:700 14px Manrope,Arial,sans-serif}.part-card p{margin:5px 0 0;color:#708391;font-size:10px;line-height:1.5}.model-explainer{margin-top:16px;padding:20px 21px 17px;border:1px solid #e3ebef;border-radius:12px;background:#fff}.model-flow-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.model-flow-heading h3{margin:5px 0 0;color:#1b3043;font:700 17px Manrope,Arial,sans-serif}.model-chip{padding:7px 10px;background:#e6f7f3;border:1px solid #d1efe8;border-radius:99px;color:#188d7e;font-size:10px;font-weight:700}.flow-steps{display:grid;grid-template-columns:1fr 22px 1fr 22px 1fr 22px 1fr;align-items:center;gap:8px}.flow-step{min-width:0;min-height:110px;padding:13px 12px;border:1px solid #e5edf0;border-radius:10px;background:#f9fbfc;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}.flow-icon{color:#18a993;font-size:23px;margin-bottom:6px}.flow-step strong{color:#294052;font-size:11px}.flow-step small{margin-top:4px;color:#82929f;font-size:9px}.flow-arrow{color:#9db0b9;text-align:center;font-size:17px}.network-nodes{width:72px;height:29px;display:flex;justify-content:center;align-items:center;gap:5px;margin-bottom:6px}.network-nodes i{width:7px;height:7px;border-radius:50%;background:#32bca7;box-shadow:0 0 0 2px #d8f2ed}.network-nodes i:nth-child(2n){transform:translateY(7px);background:#6b9ed0}.network-nodes i:nth-child(3n){transform:translateY(-5px)}.compact-nodes{width:57px}.prediction-step{background:#e9f8f4;border-color:#cfeee6}.flow-value{color:#119b88;font:800 21px Manrope,Arial,sans-serif;margin-bottom:5px}.sensor-context{display:flex;align-items:center;gap:10px;margin-top:13px;padding:10px 12px;background:#f7fafb;border-radius:8px}.sensor-mark{color:#159d8a;font-size:22px}.sensor-context strong,.sensor-context small{display:block}.sensor-context strong{font-size:10px;color:#30485b}.sensor-context small{font-size:9px;color:#84949f;margin-top:3px}.sensor-disclaimer{margin-left:auto;max-width:230px;text-align:right;color:#86959e;font-size:9px;line-height:1.4}.other-model{margin-top:11px;text-align:right;color:#7a8a96;font-size:10px}.other-model strong{color:#477184}
-@media(max-width:760px){.turbofan-canvas{height:340px}.camera-reset span{display:none}.part-card{width:154px;right:10px;bottom:42px;padding:10px}.canvas-hint{font-size:8px;bottom:9px}.flow-steps{grid-template-columns:1fr 14px 1fr;gap:7px}.flow-step{min-height:96px}.flow-arrow:nth-of-type(4){display:none}.flow-step:nth-of-type(5){grid-column:1}.flow-step:nth-of-type(7){grid-column:3}.sensor-context{align-items:flex-start;flex-wrap:wrap}.sensor-disclaimer{max-width:none;text-align:left;width:100%;margin-left:32px}.model-flow-heading{align-items:flex-start;gap:8px}.model-chip{white-space:nowrap;font-size:9px}}
-</style>
-<style>
-.turbofan-visual{border-color:#284357;background:#0a1725;box-shadow:inset 0 1px #ffffff08}.turbofan-toolbar .view-toggle,.turbofan-toolbar .camera-reset{border-color:#385064;background:#102238;box-shadow:0 5px 16px #0207114d;color:#d4dfe8}.view-toggle button,.camera-reset{color:#bdcad5}.view-toggle button.active{background:#173e40;color:#82e2d2}.canvas-hint{border:1px solid #345064;background:#0f2234e8;color:#adbfcb}.engine-overlay{color:#b4c6d1}.overlay-separator{background:#526a7c}.part-card{border-color:#385064;background:#0e2032ed;box-shadow:0 8px 22px #02071166}.part-card strong{color:#e6edf2;font-family:'Roboto',Arial,sans-serif}.part-card p{color:#a6b6c2}.part-kicker{color:#6edbc8}.model-explainer{border-color:#293e52;background:linear-gradient(155deg,#122238,#0e1b2c);box-shadow:inset 0 1px #ffffff08}.model-flow-heading h3{color:#edf2f6;font-family:'Roboto',Arial,sans-serif}.model-chip{border-color:#326258;background:#143537;color:#8ce0d1}.flow-step{border-color:#2b4154;background:#0d1a2a}.flow-step strong{color:#d8e2ea}.flow-step small{color:#9aabba}.flow-arrow{color:#7890a2}.network-nodes i{background:#50d5c1;box-shadow:0 0 0 2px #50d5c124}.network-nodes i:nth-child(2n){background:#86aed5}.prediction-step{border-color:#356457;background:#123333}.flow-value{color:#84e4d3;font-family:'Roboto',Arial,sans-serif}.sensor-context{background:#0b1928}.sensor-context strong{color:#dbe5ed}.sensor-context small,.sensor-disclaimer,.other-model{color:#9aabba}.other-model strong{color:#93c6c4}
-</style>
-<style scoped>
-.turbofan-visual{border-color:#284357;background:#0a1725;box-shadow:inset 0 1px #ffffff08}
-.turbofan-toolbar .view-toggle,.turbofan-toolbar .camera-reset{border-color:#385064;background:#102238;color:#d4dfe8}
-.view-toggle button,.camera-reset{color:#bdcad5}
-.view-toggle button.active{background:#173e40;color:#82e2d2}
-.canvas-hint{border:1px solid #345064;background:#0f2234e8;color:#adbfcb}
-.engine-overlay{color:#b4c6d1}
-.overlay-separator{background:#526a7c}
-.part-card{border-color:#385064;background:#0e2032ed;box-shadow:0 8px 22px #02071166}
-.part-card strong{color:#e6edf2;font-family:'Roboto',Arial,sans-serif}
-.part-card p{color:#a6b6c2}
-.part-kicker{color:#6edbc8}
-.model-explainer{border-color:#293e52;background:linear-gradient(155deg,#122238,#0e1b2c);box-shadow:inset 0 1px #ffffff08}
-.model-flow-heading h3{color:#edf2f6;font-family:'Roboto',Arial,sans-serif}
-.model-chip{border-color:#326258;background:#143537;color:#8ce0d1}
-.flow-step{border-color:#2b4154;background:#0d1a2a}
-.flow-step strong{color:#d8e2ea}
-.flow-step small{color:#9aabba}
-.flow-arrow{color:#7890a2}
-.network-nodes i{background:#50d5c1;box-shadow:0 0 0 2px #50d5c124}
-.network-nodes i:nth-child(2n){background:#86aed5}
-.prediction-step{border-color:#356457;background:#123333}
-.flow-value{color:#84e4d3;font-family:'Roboto',Arial,sans-serif}
-.sensor-context{background:#0b1928}
-.sensor-context strong{color:#dbe5ed}
-.sensor-context small,.sensor-disclaimer,.other-model{color:#9aabba}
-.other-model strong{color:#93c6c4}
+.tf { border: 1px solid var(--line); border-radius: 14px; background: #08131f; overflow: hidden; }
+.tf-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.seg { display: flex; padding: 3px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
+.seg button { border: 0; background: transparent; color: var(--muted); border-radius: 7px; padding: 7px 14px; font-size: 12px; font-weight: 600; }
+.seg button.on { background: var(--teal-bg); color: var(--teal); }
+.tf-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip-toggle { border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); border-radius: 99px; padding: 6px 12px; font-size: 12px; font-weight: 500; }
+.chip-toggle:hover { color: var(--text); border-color: var(--line-2); }
+.chip-toggle.on { background: var(--teal-bg); border-color: var(--teal-line); color: var(--teal); }
+.tf-stage { position: relative; }
+.tf-canvas { height: 460px; touch-action: none; }
+.tf-canvas :deep(canvas) { display: block; width: 100%; height: 100%; outline: none; }
+.tf-overlay { position: absolute; top: 12px; left: 14px; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted); pointer-events: none; }
+.tf-overlay .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px #5eead433; }
+.tf-overlay i { width: 1px; height: 12px; background: var(--line-2); }
+.tf-hover { position: absolute; top: 12px; right: 14px; padding: 6px 11px; border-radius: 8px; background: #0b1c2cee; border: 1px solid var(--line-2); font-size: 12px; pointer-events: none; }
+.tf-legend { position: absolute; left: 14px; bottom: 36px; display: grid; gap: 4px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.tf-legend span { display: flex; align-items: center; gap: 7px; }
+.sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; }
+.sw.cool { background: #7fd3ff; } .sw.hot { background: #ffa24a; } .sw.lp { background: #d5dde3; } .sw.hp { background: #9fb1bf; }
+.tf-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; color: var(--subtle); pointer-events: none; }
+.tf-parts { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 14px; border-top: 1px solid var(--line); }
+.tf-parts button { border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 500; }
+.tf-parts button:hover { color: var(--text); border-color: var(--line-2); }
+.tf-parts button.on { background: var(--teal-bg); border-color: var(--teal-line); color: var(--teal); }
+.tf-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 22px; padding: 16px 18px 20px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.kicker { display: block; color: var(--teal); font-size: 10px; font-weight: 700; letter-spacing: 1.4px; }
+.tf-detail h3 { margin: 6px 0 6px; font-size: 17px; }
+.tf-detail p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.station-list { display: grid; gap: 6px; margin-top: 8px; }
+.station { display: grid; grid-template-columns: 62px 1fr auto; align-items: center; gap: 10px; text-align: left; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); color: var(--text); font-size: 12px; }
+.station:hover { border-color: var(--line-2); }
+.station.on { border-color: var(--teal-line); background: var(--teal-bg); }
+.station b { color: var(--teal); font-weight: 700; }
+.station span { color: var(--muted); }
+.station em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+.station small { display: block; color: var(--subtle); font-size: 10px; }
+.muted { color: var(--subtle); }
+@media (max-width: 820px) {
+  .tf-canvas { height: 340px; }
+  .tf-detail { grid-template-columns: 1fr; }
+  .tf-legend, .tf-hint { display: none; }
+  .station { grid-template-columns: 56px 1fr; }
+  .station em { grid-column: 2; text-align: left; }
+}
 </style>

@@ -45,7 +45,7 @@ class Runtime:
         selected = json.loads((self.root / "artifacts/experiments/selected.json").read_text(encoding="utf-8"))
         for item in selected["files"].values():
             path = (self.root / item["path"]).resolve()
-            if not path.is_relative_to(self.root) or file_sha256(path) != item["sha256"]:
+            if not path.is_relative_to(self.root) or not raw_file_matches(path, item["sha256"]):
                 raise ValueError(f"Artefacto congelado inválido: {item['path']}")
         self.selected = selected
         self.manifest = json.loads((self.root / selected["files"]["preprocessing"]["path"]).read_text(encoding="utf-8"))

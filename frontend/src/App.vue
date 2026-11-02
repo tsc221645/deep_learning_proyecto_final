@@ -1,15 +1,16 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue'
-
-const TurbofanView = defineAsyncComponent(
-  () => import('./components/TurbofanView.vue'),
-)
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import FleetView from './views/FleetView.vue'
+import EngineView from './views/EngineView.vue'
+import ModelsView from './views/ModelsView.vue'
+import SimulatorView from './views/SimulatorView.vue'
+import { minRul, pad } from './lib/engine.js'
 
 const tabs = [
-  { id: 'fleet', label: 'Flota', icon: '◫' },
-  { id: 'engine', label: 'Motor', icon: '◉' },
-  { id: 'lab', label: 'Modelos', icon: '◈' },
-  { id: 'simulator', label: 'Simulador', icon: '▥' },
+  { id: 'fleet', label: 'Flota', hint: 'Qué motores atender' },
+  { id: 'engine', label: 'Motor', hint: 'Diagnóstico y 3D' },
+  { id: 'lab', label: 'Modelos', hint: 'Cuánto confiar' },
+  { id: 'simulator', label: 'Simulador', hint: 'Cuánto cuesta decidir' },
 ]
 const activeTab = ref('fleet')
 const engines = ref([])
@@ -20,19 +21,18 @@ const models = ref([])
 const evaluation = ref(null)
 const simulation = ref(null)
 const loading = ref(true)
-const actionLoading = ref(false)
+const simBusy = ref(false)
+const simDirty = ref(false)
 const error = ref('')
-const search = ref('')
 const sensor = ref('sensor_11')
-const maintenanceThreshold = ref(15)
-const form = reactive({
-  calendar_age: 125,
-  mlp_threshold: 15,
-  lstm_threshold: 15,
-  lead_time_cycles: 5,
-  costs: { intervention_q: 10000, failure_q: 50000, unused_cycle_q: 100,
-           mlp_inference_q: 0.01, lstm_inference_q: 0.05 },
+const threshold = ref(15)
+
+const BASE_FORM = () => ({
+  calendar_age: 125, mlp_threshold: 15, lstm_threshold: 15, lead_time_cycles: 5,
+  costs: { intervention_q: 10000, failure_q: 50000, unused_cycle_q: 100, mlp_inference_q: 0.01, lstm_inference_q: 0.05 },
 })
+const form = reactive(BASE_FORM())
+let baseForm = BASE_FORM()
 
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, { headers: { 'Content-Type': 'application/json' }, ...options })
@@ -43,54 +43,104 @@ async function api(path, options = {}) {
   return response.json()
 }
 
+// ---- enrutado por hash: #/fleet, #/engine/17, #/lab, #/simulator ------------
+const queue = computed(() => [...engines.value].sort((a, b) => minRul(a.predictions) - minRul(b.predictions)).map(e => e.unit_id))
+
+function go(tab, unitId) {
+  const target = tab === 'engine' && (unitId ?? selectedEngine.value) ? `#/engine/${unitId ?? selectedEngine.value}` : `#/${tab}`
+  if (location.hash !== target) location.hash = target
+  else applyRoute()
+}
+
+let loadToken = 0
 async function loadEngine(unitId) {
-  error.value = ''
+  const token = ++loadToken
   selectedEngine.value = unitId
+  history.value = null
   try {
     const [detail, compared] = await Promise.all([
       api(`/engines/${unitId}/history`),
       api('/compare', { method: 'POST', body: JSON.stringify({ unit_id: unitId }) }),
     ])
+    if (token !== loadToken) return
     history.value = detail
     comparison.value = compared
-    sensor.value = detail.features.includes(sensor.value) ? sensor.value : detail.features.find(x => x.startsWith('sensor_'))
-    activeTab.value = 'engine'
+    if (!detail.features.includes(sensor.value)) sensor.value = detail.features.find(x => x.startsWith('sensor_'))
   } catch (problem) {
-    error.value = problem.message
+    if (token === loadToken) error.value = problem.message
+  }
+}
+
+function applyRoute() {
+  const [, tab = 'fleet', id] = location.hash.split('/')
+  activeTab.value = tabs.some(t => t.id === tab) ? tab : 'fleet'
+  if (activeTab.value === 'engine' && engines.value.length) {
+    const wanted = Number(id) || selectedEngine.value || queue.value[0]
+    if (wanted !== selectedEngine.value || !history.value) loadEngine(wanted)
+    if (!id) window.history.replaceState(null, '', `#/engine/${wanted}`)
   }
 }
 
 async function runSimulation() {
-  actionLoading.value = true
+  simBusy.value = true
   error.value = ''
   try {
-    simulation.value = await api('/simulate-maintenance', {
-      method: 'POST', body: JSON.stringify(form),
-    })
+    simulation.value = await api('/simulate-maintenance', { method: 'POST', body: JSON.stringify(form) })
+    simDirty.value = false
   } catch (problem) {
     error.value = problem.message
   } finally {
-    actionLoading.value = false
+    simBusy.value = false
   }
 }
+let suppress = false
+async function setForm(values) {
+  suppress = true
+  Object.assign(form, values)
+  Object.assign(form.costs, values.costs)
+  await nextTick()
+  suppress = false
+}
+async function resetSimulation() {
+  await setForm(structuredClone(baseForm))
+  runSimulation()
+}
+
+// Recalcula el simulador al cambiar el escenario (con retraso para no saturar la API).
+let simTimer
+watch(form, () => {
+  if (suppress) return
+  simDirty.value = true
+  clearTimeout(simTimer)
+  simTimer = setTimeout(runSimulation, 600)
+}, { deep: true })
 
 onMounted(async () => {
+  window.addEventListener('hashchange', applyRoute)
   try {
-    const [fleet, modelList, summary] = await Promise.all([
-      api('/engines'), api('/models'), api('/evaluation/summary'),
-    ])
+    const [fleet, modelList, summary] = await Promise.all([api('/engines'), api('/models'), api('/evaluation/summary')])
     engines.value = fleet
     models.value = modelList
     evaluation.value = summary
     const base = summary.business_validation
     if (base?.costs_q) {
-      form.costs.intervention_q = base.costs_q.intervention_q
-      form.costs.failure_q = base.costs_q.failure_q
-      form.costs.unused_cycle_q = base.costs_q.unused_cycle_q
-      form.costs.mlp_inference_q = base.inference_q_by_policy?.mlp ?? 0.01
-      form.costs.lstm_inference_q = base.inference_q_by_policy?.lstm ?? 0.05
-      form.lead_time_cycles = base.lead_time_cycles
+      await setForm({
+        ...BASE_FORM(),
+        lead_time_cycles: base.lead_time_cycles,
+        costs: {
+          intervention_q: base.costs_q.intervention_q,
+          failure_q: base.costs_q.failure_q,
+          unused_cycle_q: base.costs_q.unused_cycle_q,
+          mlp_inference_q: base.inference_q_by_policy?.mlp ?? 0.01,
+          lstm_inference_q: base.inference_q_by_policy?.lstm ?? 0.05,
+        },
+      })
     }
+    baseForm = JSON.parse(JSON.stringify(form))
+    loading.value = false
+    applyRoute()
+    // Precarga el motor más urgente para que "Motor" nunca aparezca vacío.
+    if (!selectedEngine.value) loadEngine(queue.value[0])
     await runSimulation()
   } catch (problem) {
     error.value = problem.message
@@ -98,110 +148,43 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-const visibleEngines = computed(() => engines.value.filter(engine =>
-  String(engine.unit_id).includes(search.value.trim())).sort((a, b) =>
-    Math.min(a.predictions.mlp, a.predictions.lstm) - Math.min(b.predictions.mlp, b.predictions.lstm)))
-const atRisk = computed(() => engines.value.filter(engine =>
-  Math.min(engine.predictions.mlp, engine.predictions.lstm) <= maintenanceThreshold.value).length)
-const selectedPolicy = computed(() => simulation.value?.policies ?? [])
-const maxCost = computed(() => Math.max(1, ...selectedPolicy.value.map(item => item.mean_cost_q_per_engine)))
-const chart = computed(() => {
-  const records = history.value?.records ?? []
-  if (records.length < 2 || !sensor.value) return { points: '', min: 0, max: 0 }
-  const values = records.map(row => Number(row[sensor.value]))
-  const min = Math.min(...values), max = Math.max(...values)
-  const span = max - min || 1
-  const points = values.map((value, index) =>
-    `${24 + index * 752 / (values.length - 1)},${226 - (value - min) * 178 / span}`).join(' ')
-  return { points, min, max }
-})
-const latestSensorValue = computed(() => {
-  const records = history.value?.records ?? []
-  return records.length ? Number(records[records.length - 1][sensor.value]) : null
+onBeforeUnmount(() => {
+  window.removeEventListener('hashchange', applyRoute)
+  clearTimeout(simTimer)
 })
 
-const fmt = value => Number(value ?? 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })
-const money = value => `Q${fmt(value)}`
-const modelName = name => name === 'mlp' ? 'MLP' : 'LSTM'
-const figureUrl = name => `/api/evaluation/figures/${name}`
+const current = computed(() => tabs.find(t => t.id === activeTab.value))
 </script>
 
 <template>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">✦</span><div><strong>PredictGuard</strong><small>Laboratorio FD001</small></div></div>
-      <div class="side-label">EXPLORAR</div>
+      <div class="side-label">RECORRIDO</div>
       <nav aria-label="Vistas principales">
-        <button v-for="tab in tabs" :key="tab.id" :class="['nav-item', { active: activeTab === tab.id }]" @click="activeTab = tab.id">
-          <span class="nav-icon">{{ tab.icon }}</span>{{ tab.label }}
+        <button v-for="(tab, index) in tabs" :key="tab.id" :class="['nav-item', { active: activeTab === tab.id }]"
+          :aria-current="activeTab === tab.id ? 'page' : undefined" @click="go(tab.id)">
+          <span class="nav-step">{{ index + 1 }}</span>
+          <span><strong>{{ tab.label }}</strong><small>{{ tab.hint }}</small></span>
         </button>
       </nav>
       <div class="side-note"><div class="pulse"></div><div><strong>Datos simulados</strong><span>NASA C-MAPSS · FD001</span></div></div>
-      <p class="sidebar-foot">Prototipo académico.<br>No usar para mantenimiento real.</p>
+      <p class="sidebar-foot">Prototipo académico.<br />No usar para mantenimiento real.</p>
     </aside>
 
     <div class="main-wrap">
-      <header class="topbar"><div class="topbar-title">PREDICCIÓN DE VIDA ÚTIL RESTANTE</div><div class="topbar-right"><span class="status-dot"></span> Modelos cargados <span class="top-divider"></span> RUL en ciclos</div></header>
+      <header class="topbar">
+        <div class="crumbs">PredictGuard / <b>{{ current.label }}</b><template v-if="activeTab === 'engine' && selectedEngine"> / <b>Motor #{{ pad(selectedEngine) }}</b></template></div>
+        <div class="topbar-right"><span class="status-dot"></span>{{ models.length ? 'Modelos MLP y LSTM cargados' : 'Conectando…' }}<span>·</span>RUL en ciclos</div>
+      </header>
       <main>
-        <div v-if="error" class="error-banner" role="alert">{{ error }} <button @click="error = ''">Cerrar</button></div>
-        <div v-if="loading" class="loading-panel">Cargando motores y modelos…</div>
-
-        <template v-else-if="activeTab === 'fleet'">
-          <div class="page-heading"><div><div class="eyebrow">VISTA GENERAL</div><h1>Estado de la flota</h1><p>Explora 100 motores simulados fuera del conjunto de entrenamiento.</p></div><span class="date-pill">FD001 · Test oficial</span></div>
-          <div class="stat-grid">
-            <div class="stat-card"><span>Motores observados</span><strong>{{ engines.length }}</strong><small>trayectorias truncadas</small></div>
-            <div class="stat-card accent"><span>Bajo el umbral</span><strong>{{ atRisk }}</strong><small>según cualquiera de los modelos</small></div>
-            <div class="stat-card"><span>MAE test · MLP</span><strong>{{ fmt(evaluation?.test?.metrics?.mlp?.mae_cycles) }}</strong><small>ciclos · observación terminal</small></div>
-            <div class="stat-card"><span>MAE test · LSTM</span><strong>{{ fmt(evaluation?.test?.metrics?.lstm?.mae_cycles) }}</strong><small>ciclos · observación terminal</small></div>
-          </div>
-          <section class="panel"><div class="panel-head"><div><h2>Motores de demostración</h2><p>Predicciones en el último ciclo observado. Los ciclos no representan fechas.</p></div><div class="control-row"><label class="inline-control">Umbral <input v-model.number="maintenanceThreshold" type="number" min="0" max="300" /> ciclos</label><input v-model="search" class="search" type="search" placeholder="Buscar motor…" aria-label="Buscar motor" /></div></div>
-            <div class="table-scroll"><table><thead><tr><th>Motor</th><th>Último ciclo</th><th>MLP · RUL</th><th>LSTM · RUL</th><th>Indicador</th><th></th></tr></thead><tbody><tr v-for="engine in visibleEngines" :key="engine.unit_id"><td><strong>#{{ String(engine.unit_id).padStart(3, '0') }}</strong></td><td>{{ engine.last_observed_cycle }}</td><td>{{ fmt(engine.predictions.mlp) }} ciclos</td><td>{{ fmt(engine.predictions.lstm) }} ciclos</td><td><span :class="['badge', Math.min(engine.predictions.mlp, engine.predictions.lstm) <= maintenanceThreshold ? 'badge-warn' : 'badge-ok']">{{ Math.min(engine.predictions.mlp, engine.predictions.lstm) <= maintenanceThreshold ? 'Bajo umbral' : 'Sobre umbral' }}</span></td><td><button class="text-button" @click="loadEngine(engine.unit_id)">Ver motor →</button></td></tr></tbody></table></div>
-          </section>
-          <div class="info-strip threshold-note">El indicador usa el menor RUL estimado por MLP o LSTM. Este umbral solo filtra visualmente la flota; no define una política de mantenimiento.</div>
-        </template>
-
-        <template v-else-if="activeTab === 'engine'">
-          <div class="page-heading"><div><div class="eyebrow">DETALLE Y EXPLORADOR</div><h1>Motor #{{ String(selectedEngine ?? 1).padStart(3, '0') }}</h1><p>Señales, predicciones y vista interactiva del turbofan seleccionado.</p></div><select class="engine-select" :value="selectedEngine ?? ''" @change="loadEngine(Number($event.target.value))"><option disabled value="">Seleccionar motor</option><option v-for="engine in engines" :key="engine.unit_id" :value="engine.unit_id">Motor #{{ String(engine.unit_id).padStart(3, '0') }}</option></select></div>
-          <div v-if="!history" class="empty-state">Selecciona un motor en la vista de flota.</div>
-          <template v-else>
-            <div class="engine-top"><div class="engine-fact"><span>Ciclos observados</span><strong>{{ history.last_observed_cycle }}</strong></div><div class="engine-fact"><span>RUL predicho · MLP</span><strong>{{ fmt(comparison?.predictions?.mlp?.rul_predicted) }}</strong><small>ciclos</small></div><div class="engine-fact"><span>RUL predicho · LSTM</span><strong>{{ fmt(comparison?.predictions?.lstm?.rul_predicted) }}</strong><small>ciclos</small></div></div>
-            <section class="panel chart-panel"><div class="panel-head"><div><h2>Señal observada</h2><p>Trayectoria disponible del motor seleccionado</p></div><label class="inline-control">Sensor <select v-model="sensor"><option v-for="feature in history.features.filter(item => item.startsWith('sensor_'))" :key="feature" :value="feature">{{ feature }}</option></select></label></div><div class="chart-wrap"><div class="chart-y"><span>{{ fmt(chart.max) }}</span><span>{{ fmt(chart.min) }}</span></div><svg viewBox="0 0 800 250" preserveAspectRatio="none" role="img" :aria-label="`Trayectoria de ${sensor}`"><line x1="24" y1="48" x2="776" y2="48" class="grid-line" /><line x1="24" y1="137" x2="776" y2="137" class="grid-line" /><line x1="24" y1="226" x2="776" y2="226" class="grid-line" /><polyline :points="chart.points" class="sensor-line" /></svg></div><div class="chart-axis"><span>Ciclo 1</span><span>Ciclo {{ history.last_observed_cycle }}</span></div></section>
-            <section class="panel turbofan-panel">
-              <div class="turbofan-panel-heading"><div><span class="eyebrow">VISTA ESQUEMÁTICA 3D</span><h2>Arquitectura de un turbofan</h2><p>Gira el motor para observar el flujo desde la admisión hasta el escape.</p></div><div class="rul-pill"><span>RUL estimado · MLP</span><strong>{{ fmt(comparison?.predictions?.mlp?.rul_predicted) }} <small>ciclos</small></strong></div></div>
-              <TurbofanView :engine-id="selectedEngine" :observed-cycle="history.last_observed_cycle" :mlp-rul="comparison?.predictions?.mlp?.rul_predicted ?? null" :lstm-rul="comparison?.predictions?.lstm?.rul_predicted ?? null" :sensor="sensor" :sensor-value="latestSensorValue" />
-            </section>
-            <div class="info-strip"><strong>Etiqueta real:</strong> el conjunto oficial solo proporciona RUL real para el último ciclo observado de cada motor. No se muestran etiquetas inventadas para ciclos anteriores.</div>
-            <div class="info-strip visual-disclaimer"><strong>Modelo conceptual:</strong> la geometría ilustra componentes típicos de un turbofan, no el diseño exacto de un motor NASA. C-MAPSS no especifica la ubicación física de cada sensor y PredictGuard no está destinado a mantenimiento real.</div>
-          </template>
-        </template>
-
-        <template v-else-if="activeTab === 'lab'">
-          <div class="page-heading"><div><div class="eyebrow">LABORATORIO DE MODELOS</div><h1>Comparar predicciones</h1><p>Resultados congelados sobre 100 motores de test, una observación terminal por motor.</p></div><span class="date-pill">Evaluación final</span></div>
-          <div class="model-grid"><article v-for="model in models" :key="model.name" class="model-card"><div class="model-head"><span class="model-symbol">{{ model.name === 'mlp' ? 'M' : 'L' }}</span><div><h2>{{ modelName(model.name) }}</h2><small>Versión {{ model.version }}</small></div></div><div class="model-metric"><span>MAE en test</span><strong>{{ fmt(evaluation?.test?.metrics?.[model.name]?.mae_cycles) }} <em>ciclos</em></strong></div><div class="model-details"><div><span>RMSE</span><strong>{{ fmt(evaluation?.test?.metrics?.[model.name]?.rmse_cycles) }}</strong></div><div><span>Score NASA</span><strong>{{ fmt(evaluation?.test?.metrics?.[model.name]?.nasa_phm_score_sum) }}</strong></div><div><span>Sesgo</span><strong>{{ fmt(evaluation?.test?.metrics?.[model.name]?.bias_cycles) }}</strong></div><div><span>MAE validación</span><strong>{{ fmt(model.validation_mae_cycles) }}</strong></div></div></article></div>
-          <div class="figure-grid"><section class="panel figure-panel"><h2>Comparación en test</h2><img :src="figureUrl('test_comparison.png')" alt="Predicción y residuales de MLP y LSTM en test" /></section><section class="panel figure-panel"><h2>Entrenamiento MLP</h2><img :src="figureUrl('mlp_learning_curves.png')" alt="Curvas de aprendizaje MLP" /></section><section class="panel figure-panel"><h2>Entrenamiento LSTM</h2><img :src="figureUrl('lstm_learning_curves.png')" alt="Curvas de aprendizaje LSTM" /></section></div>
-          <div class="info-strip">La LSTM tuvo menor MAE en test, pero el intervalo bootstrap de la diferencia incluye cero. Las predicciones pueden sobreestimar la vida restante.</div>
-        </template>
-
-        <template v-else-if="activeTab === 'simulator'">
-          <div class="page-heading"><div><div class="eyebrow">ESCENARIOS HIPOTÉTICOS</div><h1>Simulador de mantenimiento</h1><p>Compara calendario, MLP y LSTM sobre 20 trayectorias completas de validación.</p></div><span class="date-pill">Costos en quetzales</span></div>
-          <div class="sim-layout"><section class="panel settings-panel"><h2>Configurar escenario</h2><p>Ajusta costos y umbrales para explorar decisiones simuladas.</p><div class="field-grid"><label>Costo de intervención (Q)<input v-model.number="form.costs.intervention_q" type="number" min="0" /></label><label>Costo de falla (Q)<input v-model.number="form.costs.failure_q" type="number" min="0" /></label><label>Vida descartada (Q/ciclo)<input v-model.number="form.costs.unused_cycle_q" type="number" min="0" /></label><label>Margen de acción (ciclos)<input v-model.number="form.lead_time_cycles" type="number" min="1" /></label><label>Calendario · edad<input v-model.number="form.calendar_age" type="number" min="1" /></label><label>MLP · umbral RUL<input v-model.number="form.mlp_threshold" type="number" min="1" /></label><label>LSTM · umbral RUL<input v-model.number="form.lstm_threshold" type="number" min="1" /></label><label>Inferencia LSTM (Q)<input v-model.number="form.costs.lstm_inference_q" type="number" min="0" step="0.01" /></label></div><button class="primary-button" :disabled="actionLoading" @click="runSimulation">{{ actionLoading ? 'Calculando…' : 'Calcular costos' }}</button></section>
-            <section class="panel results-panel"><div class="panel-head"><div><h2>Costo medio por motor</h2><p>Mismo conjunto y costos base para las tres políticas</p></div></div><div v-if="simulation" class="bars"><div v-for="item in selectedPolicy" :key="item.policy" class="bar-row"><div class="bar-head"><strong>{{ item.policy === 'calendar' ? 'Calendario' : modelName(item.policy) }}</strong><span>{{ money(item.mean_cost_q_per_engine) }}</span></div><div class="bar-track"><div :class="['bar-fill', item.policy]" :style="{ width: `${100 * item.mean_cost_q_per_engine / maxCost}%` }"></div></div><div class="bar-foot">Umbral {{ item.threshold_cycles }} ciclos · {{ item.failures }} fallas · ahorro {{ fmt(item.savings_vs_calendar_pct) }} %</div></div></div><div v-else class="empty-state">Configura un escenario para ver resultados.</div><div class="info-strip compact">Estimación exploratoria sobre validación. Los costos son supuestos, no datos de NASA ni ahorros reales.</div></section></div>
-          <section class="panel figure-panel full-figure"><h2>Curva de valor del escenario base</h2><img :src="figureUrl('business_cost_curve.png')" alt="Costo medio por motor según umbral de intervención" /></section>
-        </template>
+        <div v-if="error" class="error-banner" role="alert"><span>{{ error }}</span><button @click="error = ''">Cerrar</button></div>
+        <template v-if="loading"><div class="skeleton"></div><div class="skeleton"></div><div class="loading-panel">Cargando motores y modelos…</div></template>
+        <FleetView v-else-if="activeTab === 'fleet'" v-model:threshold="threshold" :engines="engines" :evaluation="evaluation" @open="id => go('engine', id)" />
+        <EngineView v-else-if="activeTab === 'engine'" v-model:sensor="sensor" :engines="engines" :queue="queue" :history="history" :comparison="comparison" :threshold="threshold" @select="id => go('engine', id)" />
+        <ModelsView v-else-if="activeTab === 'lab'" :models="models" :evaluation="evaluation" />
+        <SimulatorView v-else :form="form" :simulation="simulation" :busy="simBusy" :dirty="simDirty" @run="runSimulation" @reset="resetSimulation" />
       </main>
     </div>
   </div>
 </template>
-
-<style scoped>
-.turbofan-panel{padding:20px;margin:20px 0 16px}.turbofan-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:2px 2px 17px}.turbofan-panel-heading .eyebrow{margin-bottom:6px}.turbofan-panel-heading h2{margin-bottom:5px;font-size:18px}.turbofan-panel-heading p{margin:0;color:#7c8b9b;font-size:12px}.rul-pill{min-width:170px;padding:10px 14px;background:#e8f8f5;border:1px solid #d1efe8;border-radius:10px}.rul-pill span{display:block;color:#52877f;font-size:10px;font-weight:700}.rul-pill strong{display:block;margin-top:3px;color:#118e7c;font:800 21px Manrope,Arial,sans-serif}.rul-pill small{font:600 10px 'DM Sans',Arial,sans-serif;color:#67978f}.visual-disclaimer{margin-top:12px}.visual-empty{padding:48px 20px;text-align:center}.visual-empty-icon{color:#17ac98;font-size:30px}.visual-empty h2{margin:11px 0 7px}.visual-empty p{margin:0;color:#7c8b9b;font-size:12px}.visual-empty .primary-button{margin-top:18px}
-@media(max-width:760px){.turbofan-panel{padding:13px}.turbofan-panel-heading{align-items:flex-start}.rul-pill{min-width:130px;padding:8px}.rul-pill strong{font-size:17px}.turbofan-panel-heading h2{font-size:15px}.turbofan-panel-heading p{font-size:10px}}
-</style>
-
-<style scoped>
-.turbofan-panel{border-color:#284255;background:linear-gradient(155deg,#122238 0%,#0e1b2c 100%)}
-.rul-pill{border-color:#32675e;background:linear-gradient(145deg,#143535 0%,#10272e 100%)}
-.rul-pill span{color:#8ed8ca}
-.rul-pill strong{color:#8ce5d2}
-</style>
