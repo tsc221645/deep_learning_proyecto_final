@@ -1,0 +1,41 @@
+{
+  "metrics": {
+    "mlp": {
+      "sample_count": 100,
+      "mae_cycles": 16.091286306381225,
+      "rmse_cycles": 24.07068837734989,
+      "nasa_phm_score_sum": 30837.068750395752,
+      "nasa_phm_score_mean": 308.3706875039575,
+      "bias_cycles": 7.310549287796021,
+      "absolute_error_p50_cycles": 9.79888916015625,
+      "absolute_error_p90_cycles": 37.22986526489259
+    },
+    "lstm": {
+      "sample_count": 100,
+      "mae_cycles": 14.702450466156005,
+      "rmse_cycles": 20.74007533878511,
+      "nasa_phm_score_sum": 1814.592422068649,
+      "nasa_phm_score_mean": 18.145924220686492,
+      "bias_cycles": 6.457819423675537,
+      "absolute_error_p50_cycles": 8.165172576904297,
+      "absolute_error_p90_cycles": 38.121662902832036
+    }
+  },
+  "bootstrap_95pct_mae_cycles": {
+    "mlp": [
+      12.904153156280518,
+      19.85371537208557
+    ],
+    "lstm": [
+      11.992599081993102,
+      17.790655279159544
+    ],
+    "lstm_minus_mlp_mae": [
+      -4.853559160232544,
+      1.6665788650512687
+    ]
+  },
+  "bootstrap_unit": "engine",
+  "bootstrap_repeats": 2000,
+  "test_policy": "terminal observation only; no tuning on test"
+}

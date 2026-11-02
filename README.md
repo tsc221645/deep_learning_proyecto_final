@@ -104,7 +104,8 @@ Entrena tres semillas y selecciona el checkpoint con menor MAE de validación. G
 
 ## Fases 7–10: LSTM, comparación, test y valor
 
-El código para las fases 7–10 está preparado. Requiere ejecutar entrenamiento y
-selección para producir resultados reales; sigue la [guía de Kaggle](docs/kaggle_training.md)
-si prefieres usar una GPU remota. El test oficial se evalúa solo después de
-congelar la selección en `artifacts/experiments/selected.json`.
+Las corridas de Kaggle y sus artefactos ya se integraron. La
+[guía de Kaggle](docs/kaggle_training.md) describe cómo reproducirlas. El test
+oficial se evaluó después de congelar la selección en
+`artifacts/experiments/selected.json`. Consulta el
+[resumen de resultados de las fases 7 a 10](docs/results_phases_7_10.md).

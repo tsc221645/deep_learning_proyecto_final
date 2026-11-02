@@ -1,0 +1,56 @@
+{
+  "data_split": "complete validation engines",
+  "currency": "hypothetical GTQ",
+  "threshold_selection": "minimum mean cost on validation; exploratory in-sample estimate",
+  "lead_time_cycles": 5,
+  "costs_q": {
+    "intervention_q": 10000,
+    "failure_q": 50000,
+    "unused_cycle_q": 100,
+    "inference_q": 0.0
+  },
+  "inference_q_by_policy": {
+    "calendar": 0,
+    "mlp": 0.01,
+    "lstm": 0.05
+  },
+  "selected_base": [
+    {
+      "scenario": "base",
+      "policy": "lstm",
+      "threshold_cycles": 15,
+      "mean_cost_q_per_engine": 11333.0625,
+      "median_cost_q_per_engine": 11308.55,
+      "total_cost_q": 226661.25,
+      "failures": 0,
+      "calendar_cost_q_per_engine": 17850.0,
+      "savings_q_per_engine": 6516.9375,
+      "savings_pct": 36.509453781512605
+    },
+    {
+      "scenario": "base",
+      "policy": "mlp",
+      "threshold_cycles": 15,
+      "mean_cost_q_per_engine": 11491.596000000001,
+      "median_cost_q_per_engine": 11451.89,
+      "total_cost_q": 229831.92,
+      "failures": 0,
+      "calendar_cost_q_per_engine": 17850.0,
+      "savings_q_per_engine": 6358.403999999999,
+      "savings_pct": 35.621310924369745
+    },
+    {
+      "scenario": "base",
+      "policy": "calendar",
+      "threshold_cycles": 125,
+      "mean_cost_q_per_engine": 17850.0,
+      "median_cost_q_per_engine": 16850.0,
+      "total_cost_q": 357000.0,
+      "failures": 0,
+      "calendar_cost_q_per_engine": 17850.0,
+      "savings_q_per_engine": 0.0,
+      "savings_pct": 0.0
+    }
+  ],
+  "test_official_used": false
+}

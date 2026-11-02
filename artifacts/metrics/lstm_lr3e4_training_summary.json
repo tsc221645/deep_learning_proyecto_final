@@ -1,0 +1,158 @@
+{
+  "created_at": "2026-11-02T16:26:48.399362+00:00",
+  "run_id": "lstm_lr3e4",
+  "model": "LSTMRegressor",
+  "device": "cuda",
+  "device_name": "Tesla T4",
+  "torch_version": "2.11.0+cu128",
+  "window_size": 30,
+  "feature_columns": [
+    "cycle",
+    "setting_1",
+    "setting_2",
+    "setting_3",
+    "sensor_2",
+    "sensor_3",
+    "sensor_4",
+    "sensor_6",
+    "sensor_7",
+    "sensor_8",
+    "sensor_9",
+    "sensor_11",
+    "sensor_12",
+    "sensor_13",
+    "sensor_14",
+    "sensor_15",
+    "sensor_17",
+    "sensor_20",
+    "sensor_21"
+  ],
+  "model_config": {
+    "hidden_size": 64,
+    "num_layers": 2,
+    "dropout": 0.2
+  },
+  "training_config": {
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "max_epochs": 100,
+    "batch_size": 64,
+    "early_stopping": {
+      "monitor": "validation_mae_cycles",
+      "patience": 10,
+      "min_delta_cycles": 0.0,
+      "restore_best_checkpoint": true
+    },
+    "loss": {
+      "name": "huber",
+      "delta_cycles": 1.0
+    },
+    "optimizer": {
+      "name": "adam",
+      "learning_rate": 0.001
+    }
+  },
+  "validation_metrics_by_seed": [
+    {
+      "seed": 42,
+      "best_epoch": 44,
+      "epochs_trained": 54,
+      "train_seconds": 49.57555322499991,
+      "training_metrics": {
+        "sample_count": 14241,
+        "mae_cycles": 14.290713699603463,
+        "rmse_cycles": 28.193586655602022,
+        "nasa_phm_score_sum": 25704566.09522368,
+        "nasa_phm_score_mean": 1804.9691801996826,
+        "bias_cycles": -6.665435288747822,
+        "absolute_error_p50_cycles": 4.763343811035156,
+        "absolute_error_p90_cycles": 39.08076477050781
+      },
+      "validation_metrics": {
+        "sample_count": 3490,
+        "mae_cycles": 19.335651607773023,
+        "rmse_cycles": 28.206499821078022,
+        "nasa_phm_score_sum": 133363.0840818047,
+        "nasa_phm_score_mean": 38.21291807501567,
+        "bias_cycles": -5.028858822669545,
+        "absolute_error_p50_cycles": 10.650376319885254,
+        "absolute_error_p90_cycles": 52.340965270996094
+      },
+      "checkpoint": "lstm_lr3e4_seed_42.pt"
+    },
+    {
+      "seed": 43,
+      "best_epoch": 47,
+      "epochs_trained": 57,
+      "train_seconds": 53.65441584900009,
+      "training_metrics": {
+        "sample_count": 14241,
+        "mae_cycles": 12.402530577341649,
+        "rmse_cycles": 25.97767217052035,
+        "nasa_phm_score_sum": 16720630.166400507,
+        "nasa_phm_score_mean": 1174.119104444948,
+        "bias_cycles": -5.076273669211116,
+        "absolute_error_p50_cycles": 4.0303802490234375,
+        "absolute_error_p90_cycles": 33.34770202636719
+      },
+      "validation_metrics": {
+        "sample_count": 3490,
+        "mae_cycles": 19.7011459006621,
+        "rmse_cycles": 28.861885306098223,
+        "nasa_phm_score_sum": 181978.3426028266,
+        "nasa_phm_score_mean": 52.142791576741146,
+        "bias_cycles": -3.8902579613947936,
+        "absolute_error_p50_cycles": 10.883487701416016,
+        "absolute_error_p90_cycles": 52.20412597656248
+      },
+      "checkpoint": "lstm_lr3e4_seed_43.pt"
+    },
+    {
+      "seed": 44,
+      "best_epoch": 47,
+      "epochs_trained": 57,
+      "train_seconds": 52.12226217400007,
+      "training_metrics": {
+        "sample_count": 14241,
+        "mae_cycles": 12.958736816456073,
+        "rmse_cycles": 26.310241770181815,
+        "nasa_phm_score_sum": 17509755.212860286,
+        "nasa_phm_score_mean": 1229.5312978625298,
+        "bias_cycles": -5.942851832806834,
+        "absolute_error_p50_cycles": 4.438690185546875,
+        "absolute_error_p90_cycles": 33.93711853027344
+      },
+      "validation_metrics": {
+        "sample_count": 3490,
+        "mae_cycles": 18.745972168992104,
+        "rmse_cycles": 27.077237898746233,
+        "nasa_phm_score_sum": 109364.28117694981,
+        "nasa_phm_score_mean": 31.336470251275017,
+        "bias_cycles": -3.2128780264909085,
+        "absolute_error_p50_cycles": 10.800477981567383,
+        "absolute_error_p90_cycles": 49.88627166748046
+      },
+      "checkpoint": "lstm_lr3e4_seed_44.pt"
+    }
+  ],
+  "selected_seed": 44,
+  "selected_checkpoint": "lstm_lr3e4_best.pt",
+  "selected_validation_metrics": {
+    "sample_count": 3490,
+    "mae_cycles": 18.745972168992104,
+    "rmse_cycles": 27.077237898746233,
+    "nasa_phm_score_sum": 109364.28117694981,
+    "nasa_phm_score_mean": 31.336470251275017,
+    "bias_cycles": -3.2128780264909085,
+    "absolute_error_p50_cycles": 10.800477981567383,
+    "absolute_error_p90_cycles": 49.88627166748046
+  },
+  "inference_latency_batch_1_ms": {
+    "p50": 0.7424110000329165,
+    "p95": 0.8120213501229044
+  },
+  "official_test_loaded": false
+}

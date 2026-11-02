@@ -1,0 +1,44 @@
+{
+  "selection_basis": "validation_mae_cycles",
+  "lstm_run": "lstm",
+  "features": [
+    "cycle",
+    "setting_1",
+    "setting_2",
+    "setting_3",
+    "sensor_2",
+    "sensor_3",
+    "sensor_4",
+    "sensor_6",
+    "sensor_7",
+    "sensor_8",
+    "sensor_9",
+    "sensor_11",
+    "sensor_12",
+    "sensor_13",
+    "sensor_14",
+    "sensor_15",
+    "sensor_17",
+    "sensor_20",
+    "sensor_21"
+  ],
+  "window_size": 30,
+  "validation_mae_cycles": {
+    "mlp": 16.98813558417268,
+    "lstm": 18.13075007435927
+  },
+  "files": {
+    "mlp": {
+      "path": "artifacts/models/mlp_best.pt",
+      "sha256": "09ed7f2223c894729a14eb3e75610e7c4bb1d6d9e949f300d3d518340dbbae14"
+    },
+    "lstm": {
+      "path": "artifacts/models/lstm_best.pt",
+      "sha256": "9a0c4a6e919545e524be2c1710537fc77304f4aab6d071f1958b442eff3af084"
+    },
+    "preprocessing": {
+      "path": "artifacts/processed/fd001/preprocessing_manifest.json",
+      "sha256": "8a95b9fa9ee043379b6d70643c76ef08ec4c751bb63ce3185ac69de24c1ae73f"
+    }
+  }
+}
