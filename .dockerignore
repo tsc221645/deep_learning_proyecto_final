@@ -1,0 +1,11 @@
+.git
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+frontend/node_modules
+frontend/dist
+notebooks
+work
+data/interim
+data/processed

@@ -1,0 +1,20 @@
+{
+  "measured_at": "2026-11-02T17:06:00.937770+00:00",
+  "method": "in-process FastAPI TestClient POST /compare, batch one",
+  "warmup_requests": 10,
+  "measurement_requests": 100,
+  "p50_ms": 11.762100039049983,
+  "p95_ms": 18.03168509504757,
+  "throughput_requests_per_second": 72.81614019114922,
+  "max_ms": 153.36210001260042,
+  "process_rss_mb": 502.2734375,
+  "device": "cpu",
+  "cpu": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "torch": "2.11.0+cu128",
+  "checkpoint_bytes": {
+    "mlp": 329045,
+    "lstm": 225093
+  }
+}

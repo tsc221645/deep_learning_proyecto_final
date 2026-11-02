@@ -50,6 +50,7 @@ env/
 !/artifacts/metrics/lstm*.json
 !/artifacts/metrics/test_predictions.csv
 !/artifacts/metrics/test_metrics.json
+!/artifacts/metrics/api_performance.json
 !/artifacts/metrics/validation_feature_sensitivity.csv
 /artifacts/figures/*
 !/artifacts/figures/.gitkeep
@@ -69,6 +70,7 @@ env/
 !/artifacts/processed/fd001/
 /artifacts/processed/fd001/*
 !/artifacts/processed/fd001/preprocessing_manifest.json
+!/artifacts/processed/fd001/scaler.joblib
 !/artifacts/processed/fd001/train_unit_ids.json
 !/artifacts/processed/fd001/val_unit_ids.json
 PredictGuard_Plan_Desarrollo_Por_Fases.md

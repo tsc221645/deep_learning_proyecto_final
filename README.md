@@ -46,9 +46,11 @@ conda activate dm1
 .\scripts\test.ps1
 ```
 
-El proyecto usa el wheel CUDA 12.6 de PyTorch. La GPU local se detecta correctamente. FD001 es suficientemente pequeño para trabajar y entrenar aquí; Kaggle no hace falta por ahora.
+El entrenamiento final se ejecutó en Kaggle. Los contenedores de la aplicación
+usan PyTorch CPU para servir los modelos sin depender de una GPU.
 
-Los archivos locales de C-MAPSS se mantienen fuera de Git. La configuración inicial está en `configs/config.yaml`.
+La configuración inicial está en `configs/config.yaml`. Los archivos FD001
+necesarios para la demo están versionados en `data/raw/`.
 
 ## Fase 2: datos NASA C-MAPSS FD001
 
@@ -60,7 +62,9 @@ conda activate dm1
 .\scripts\validate.ps1
 ```
 
-La validación genera `data/raw/data_manifest.json` con los hashes SHA-256, tamaños, conteos y procedencia. Los datos se mantienen fuera de Git; el manifiesto sí se versiona.
+La validación genera `data/raw/data_manifest.json` con los hashes SHA-256,
+tamaños, conteos y procedencia. Los datos FD001 de esta demo también están
+versionados.
 
 ## Fase 3: análisis exploratorio
 
@@ -109,3 +113,17 @@ Las corridas de Kaggle y sus artefactos ya se integraron. La
 oficial se evaluó después de congelar la selección en
 `artifacts/experiments/selected.json`. Consulta el
 [resumen de resultados de las fases 7 a 10](docs/results_phases_7_10.md).
+
+## Fases 11–12: aplicación y despliegue
+
+La plataforma tiene API FastAPI y cuatro vistas Vue: flota, motor, modelos y
+simulador. Desde un clon limpio con Docker Desktop:
+
+```powershell
+docker compose up --build
+```
+
+Abre `http://localhost:8080` para la web y `http://localhost:8000/docs` para
+probar la API. La [guía de despliegue](docs/deployment.md) describe el flujo de
+demostración, pruebas, rendimiento y límites. El [diagrama de arquitectura](docs/architecture.md)
+explica qué datos usa cada módulo.

@@ -12,7 +12,6 @@ import yaml
 
 from predictguard.costs import Costs, trajectory_cost
 from predictguard.experiment_log import atomic_write_csv
-from predictguard.train import _atomic_write_json
 
 
 def _load_predictions(path: Path) -> pd.DataFrame:
@@ -47,6 +46,7 @@ def simulate(frame: pd.DataFrame, policy: str, threshold: int,
 
 
 def run(root: Path, config_path: Path) -> dict:
+    from predictguard.train import _atomic_write_json
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     costs = Costs(**config["costs_q"])
     inference_by_policy = config.get("inference_q_by_policy", {})
