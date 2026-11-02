@@ -117,7 +117,8 @@ oficial se evaluó después de congelar la selección en
 ## Fases 11–12: aplicación y despliegue
 
 La plataforma tiene API FastAPI y cuatro vistas Vue: flota, detalle del motor
-con explorador 3D y flujo del MLP, modelos y simulador. La vista 3D permite
+con explorador 3D y flujo del MLP, modelos y simulador. Usa Roboto y un tema
+ejecutivo azul espacial. La vista 3D permite
 rotar, acercar y seleccionar componentes; es una representación conceptual,
 no una reconstrucción física ni un mapa real de sensores. Desde un clon limpio
 con Docker Desktop:
@@ -130,3 +131,9 @@ Abre `http://localhost:8080` para la web y `http://localhost:8000/docs` para
 probar la API. La [guía de despliegue](docs/deployment.md) describe el flujo de
 demostración, pruebas, rendimiento y límites. El [diagrama de arquitectura](docs/architecture.md)
 explica qué datos usa cada módulo.
+
+La [guía de la interfaz](docs/ui_guide.md) explica pantallas, métricas,
+umbrales y los supuestos del simulador.
+
+Para interpretar las pantallas, umbrales, métricas y costos hipotéticos,
+consulta la [guía de uso de la interfaz](docs/ui_guide.md).

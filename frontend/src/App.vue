@@ -1,6 +1,9 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import TurbofanView from './components/TurbofanView.vue'
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue'
+
+const TurbofanView = defineAsyncComponent(
+  () => import('./components/TurbofanView.vue'),
+)
 
 const tabs = [
   { id: 'fleet', label: 'Flota', icon: '◫' },
@@ -155,6 +158,7 @@ const figureUrl = name => `/api/evaluation/figures/${name}`
           <section class="panel"><div class="panel-head"><div><h2>Motores de demostración</h2><p>Predicciones en el último ciclo observado. Los ciclos no representan fechas.</p></div><div class="control-row"><label class="inline-control">Umbral <input v-model.number="maintenanceThreshold" type="number" min="0" max="300" /> ciclos</label><input v-model="search" class="search" type="search" placeholder="Buscar motor…" aria-label="Buscar motor" /></div></div>
             <div class="table-scroll"><table><thead><tr><th>Motor</th><th>Último ciclo</th><th>MLP · RUL</th><th>LSTM · RUL</th><th>Indicador</th><th></th></tr></thead><tbody><tr v-for="engine in visibleEngines" :key="engine.unit_id"><td><strong>#{{ String(engine.unit_id).padStart(3, '0') }}</strong></td><td>{{ engine.last_observed_cycle }}</td><td>{{ fmt(engine.predictions.mlp) }} ciclos</td><td>{{ fmt(engine.predictions.lstm) }} ciclos</td><td><span :class="['badge', Math.min(engine.predictions.mlp, engine.predictions.lstm) <= maintenanceThreshold ? 'badge-warn' : 'badge-ok']">{{ Math.min(engine.predictions.mlp, engine.predictions.lstm) <= maintenanceThreshold ? 'Bajo umbral' : 'Sobre umbral' }}</span></td><td><button class="text-button" @click="loadEngine(engine.unit_id)">Ver motor →</button></td></tr></tbody></table></div>
           </section>
+          <div class="info-strip threshold-note">El indicador usa el menor RUL estimado por MLP o LSTM. Este umbral solo filtra visualmente la flota; no define una política de mantenimiento.</div>
         </template>
 
         <template v-else-if="activeTab === 'engine'">
@@ -193,4 +197,11 @@ const figureUrl = name => `/api/evaluation/figures/${name}`
 <style scoped>
 .turbofan-panel{padding:20px;margin:20px 0 16px}.turbofan-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:2px 2px 17px}.turbofan-panel-heading .eyebrow{margin-bottom:6px}.turbofan-panel-heading h2{margin-bottom:5px;font-size:18px}.turbofan-panel-heading p{margin:0;color:#7c8b9b;font-size:12px}.rul-pill{min-width:170px;padding:10px 14px;background:#e8f8f5;border:1px solid #d1efe8;border-radius:10px}.rul-pill span{display:block;color:#52877f;font-size:10px;font-weight:700}.rul-pill strong{display:block;margin-top:3px;color:#118e7c;font:800 21px Manrope,Arial,sans-serif}.rul-pill small{font:600 10px 'DM Sans',Arial,sans-serif;color:#67978f}.visual-disclaimer{margin-top:12px}.visual-empty{padding:48px 20px;text-align:center}.visual-empty-icon{color:#17ac98;font-size:30px}.visual-empty h2{margin:11px 0 7px}.visual-empty p{margin:0;color:#7c8b9b;font-size:12px}.visual-empty .primary-button{margin-top:18px}
 @media(max-width:760px){.turbofan-panel{padding:13px}.turbofan-panel-heading{align-items:flex-start}.rul-pill{min-width:130px;padding:8px}.rul-pill strong{font-size:17px}.turbofan-panel-heading h2{font-size:15px}.turbofan-panel-heading p{font-size:10px}}
+</style>
+
+<style scoped>
+.turbofan-panel{border-color:#284255;background:linear-gradient(155deg,#122238 0%,#0e1b2c 100%)}
+.rul-pill{border-color:#32675e;background:linear-gradient(145deg,#143535 0%,#10272e 100%)}
+.rul-pill span{color:#8ed8ca}
+.rul-pill strong{color:#8ce5d2}
 </style>

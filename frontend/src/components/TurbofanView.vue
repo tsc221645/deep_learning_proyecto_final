@@ -89,15 +89,39 @@ function addRotor(x, radius, bladeCount, part, material) {
     rotor,
   ).rotation.z = Math.PI / 2
 
+  const bladeShape = new THREE.Shape()
+  bladeShape.moveTo(-radius * 0.16, radius * 0.19)
+  bladeShape.bezierCurveTo(
+    -radius * 0.2, radius * 0.38,
+    -radius * 0.11, radius * 0.76,
+    -radius * 0.035, radius * 0.97,
+  )
+  bladeShape.bezierCurveTo(
+    radius * 0.035, radius * 1.03,
+    radius * 0.23, radius * 0.99,
+    radius * 0.27, radius * 0.93,
+  )
+  bladeShape.bezierCurveTo(
+    radius * 0.2, radius * 0.67,
+    radius * 0.4, radius * 0.36,
+    radius * 0.45, radius * 0.19,
+  )
+  bladeShape.closePath()
+  const bladeDepth = radius * 0.085
+  const bladeGeometry = new THREE.ExtrudeGeometry(bladeShape, {
+    depth: bladeDepth,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 1,
+    bevelSize: radius * 0.018,
+    bevelThickness: radius * 0.018,
+    curveSegments: 8,
+  })
+  bladeGeometry.translate(0, 0, -bladeDepth / 2)
+
   for (let index = 0; index < bladeCount; index += 1) {
     const angle = (index * Math.PI * 2) / bladeCount
-    const blade = addPart(
-      new THREE.BoxGeometry(0.075, radius * 0.76, 0.12),
-      material,
-      [0, Math.cos(angle) * radius * 0.53, Math.sin(angle) * radius * 0.53],
-      part,
-      rotor,
-    )
+    const blade = addPart(bladeGeometry, material, [0, 0, 0], part, rotor)
     blade.rotation.x = angle
   }
   return rotor
@@ -131,7 +155,7 @@ function buildEngine() {
   })
 
   casing = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.05, 0.82, 4.65, 64, 1, false),
+    new THREE.CylinderGeometry(0.82, 1.05, 4.65, 64, 1, false),
     new THREE.MeshPhysicalMaterial({
       color: 0x4c7489,
       metalness: 0.46,
@@ -150,14 +174,14 @@ function buildEngine() {
   const core = axialCylinder(0.28, 4.55, darkMetal, 0.12, 'turbine')
   internalParts.push(core)
   const coreNose = addPart(
-    new THREE.ConeGeometry(0.38, 0.58, 48),
+    new THREE.ConeGeometry(0.39, 0.78, 48),
     brightMetal,
-    [-2.32, 0, 0],
+    [-2.2, 0, 0],
     'fan',
   )
-  coreNose.rotation.z = -Math.PI / 2
+  coreNose.rotation.z = Math.PI / 2
   internalParts.push(coreNose)
-  axialRing(0.93, 0.075, brightMetal, -2.18, 'fan')
+  axialRing(1.01, 0.055, brightMetal, -2.25, 'fan')
   axialRing(0.77, 0.05, metal, 2.25, 'exhaust')
 
   const fan = addRotor(-2.05, 0.9, 20, 'fan', brightMetal)
@@ -253,7 +277,7 @@ watch(cutaway, value => setCutaway(value))
 
 onMounted(() => {
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0xf1f6f8)
+  scene.background = new THREE.Color(0x0b1725)
   camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100)
   camera.position.set(4.4, 3.6, 6.3)
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
@@ -285,13 +309,13 @@ onMounted(() => {
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshStandardMaterial({ color: 0xf1f6f8, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: 0x0b1725, roughness: 1 }),
   )
   floor.rotation.x = -Math.PI / 2
   floor.position.y = -1.18
   floor.receiveShadow = true
   scene.add(floor)
-  const grid = new THREE.GridHelper(12, 24, 0xb9cbd1, 0xd8e3e7)
+  const grid = new THREE.GridHelper(12, 24, 0x3e7180, 0x20384b)
   grid.position.y = -1.17
   scene.add(grid)
 
@@ -378,4 +402,35 @@ onBeforeUnmount(() => {
 <style scoped>
 .turbofan-visual{position:relative;overflow:hidden;border:1px solid #dfe9ed;border-radius:12px;background:#f1f6f8}.turbofan-toolbar{position:absolute;z-index:2;top:14px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:center}.view-toggle{display:flex;padding:3px;background:#fff;border:1px solid #dce7ea;border-radius:9px;box-shadow:0 2px 10px #18394a0d}.view-toggle button,.camera-reset{border:0;background:transparent;color:#63788a;border-radius:7px;padding:8px 11px;font-size:11px;font-weight:700}.view-toggle button.active{background:#e2f5f1;color:#0d9c88}.camera-reset{background:#fff;border:1px solid #dce7ea;box-shadow:0 2px 10px #18394a0d}.camera-reset span{margin-left:4px}.turbofan-canvas{height:420px;touch-action:none}.turbofan-canvas :deep(canvas){display:block;width:100%;height:100%;outline:none}.canvas-hint{position:absolute;bottom:13px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#788b98;font-size:10px;background:#ffffffc9;border-radius:30px;padding:7px 12px}.engine-overlay{position:absolute;top:70px;left:19px;display:flex;align-items:center;gap:7px;color:#597080;font-size:9px;font-weight:800;letter-spacing:1px}.overlay-dot{width:7px;height:7px;background:#18b79f;border-radius:50%;box-shadow:0 0 0 3px #18b79f24}.overlay-separator{height:12px;width:1px;background:#c9d6db;margin:0 3px}.part-card{position:absolute;right:15px;bottom:47px;width:190px;padding:13px 15px;border:1px solid #dce7e9;border-radius:10px;background:#fffffff0;box-shadow:0 5px 20px #173a4a12}.part-kicker{display:block;color:#14a18c;font-size:9px;font-weight:800;letter-spacing:1.3px}.part-card strong{display:block;margin-top:5px;color:#20384a;font:700 14px Manrope,Arial,sans-serif}.part-card p{margin:5px 0 0;color:#708391;font-size:10px;line-height:1.5}.model-explainer{margin-top:16px;padding:20px 21px 17px;border:1px solid #e3ebef;border-radius:12px;background:#fff}.model-flow-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.model-flow-heading h3{margin:5px 0 0;color:#1b3043;font:700 17px Manrope,Arial,sans-serif}.model-chip{padding:7px 10px;background:#e6f7f3;border:1px solid #d1efe8;border-radius:99px;color:#188d7e;font-size:10px;font-weight:700}.flow-steps{display:grid;grid-template-columns:1fr 22px 1fr 22px 1fr 22px 1fr;align-items:center;gap:8px}.flow-step{min-width:0;min-height:110px;padding:13px 12px;border:1px solid #e5edf0;border-radius:10px;background:#f9fbfc;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}.flow-icon{color:#18a993;font-size:23px;margin-bottom:6px}.flow-step strong{color:#294052;font-size:11px}.flow-step small{margin-top:4px;color:#82929f;font-size:9px}.flow-arrow{color:#9db0b9;text-align:center;font-size:17px}.network-nodes{width:72px;height:29px;display:flex;justify-content:center;align-items:center;gap:5px;margin-bottom:6px}.network-nodes i{width:7px;height:7px;border-radius:50%;background:#32bca7;box-shadow:0 0 0 2px #d8f2ed}.network-nodes i:nth-child(2n){transform:translateY(7px);background:#6b9ed0}.network-nodes i:nth-child(3n){transform:translateY(-5px)}.compact-nodes{width:57px}.prediction-step{background:#e9f8f4;border-color:#cfeee6}.flow-value{color:#119b88;font:800 21px Manrope,Arial,sans-serif;margin-bottom:5px}.sensor-context{display:flex;align-items:center;gap:10px;margin-top:13px;padding:10px 12px;background:#f7fafb;border-radius:8px}.sensor-mark{color:#159d8a;font-size:22px}.sensor-context strong,.sensor-context small{display:block}.sensor-context strong{font-size:10px;color:#30485b}.sensor-context small{font-size:9px;color:#84949f;margin-top:3px}.sensor-disclaimer{margin-left:auto;max-width:230px;text-align:right;color:#86959e;font-size:9px;line-height:1.4}.other-model{margin-top:11px;text-align:right;color:#7a8a96;font-size:10px}.other-model strong{color:#477184}
 @media(max-width:760px){.turbofan-canvas{height:340px}.camera-reset span{display:none}.part-card{width:154px;right:10px;bottom:42px;padding:10px}.canvas-hint{font-size:8px;bottom:9px}.flow-steps{grid-template-columns:1fr 14px 1fr;gap:7px}.flow-step{min-height:96px}.flow-arrow:nth-of-type(4){display:none}.flow-step:nth-of-type(5){grid-column:1}.flow-step:nth-of-type(7){grid-column:3}.sensor-context{align-items:flex-start;flex-wrap:wrap}.sensor-disclaimer{max-width:none;text-align:left;width:100%;margin-left:32px}.model-flow-heading{align-items:flex-start;gap:8px}.model-chip{white-space:nowrap;font-size:9px}}
+</style>
+<style>
+.turbofan-visual{border-color:#284357;background:#0a1725;box-shadow:inset 0 1px #ffffff08}.turbofan-toolbar .view-toggle,.turbofan-toolbar .camera-reset{border-color:#385064;background:#102238;box-shadow:0 5px 16px #0207114d;color:#d4dfe8}.view-toggle button,.camera-reset{color:#bdcad5}.view-toggle button.active{background:#173e40;color:#82e2d2}.canvas-hint{border:1px solid #345064;background:#0f2234e8;color:#adbfcb}.engine-overlay{color:#b4c6d1}.overlay-separator{background:#526a7c}.part-card{border-color:#385064;background:#0e2032ed;box-shadow:0 8px 22px #02071166}.part-card strong{color:#e6edf2;font-family:'Roboto',Arial,sans-serif}.part-card p{color:#a6b6c2}.part-kicker{color:#6edbc8}.model-explainer{border-color:#293e52;background:linear-gradient(155deg,#122238,#0e1b2c);box-shadow:inset 0 1px #ffffff08}.model-flow-heading h3{color:#edf2f6;font-family:'Roboto',Arial,sans-serif}.model-chip{border-color:#326258;background:#143537;color:#8ce0d1}.flow-step{border-color:#2b4154;background:#0d1a2a}.flow-step strong{color:#d8e2ea}.flow-step small{color:#9aabba}.flow-arrow{color:#7890a2}.network-nodes i{background:#50d5c1;box-shadow:0 0 0 2px #50d5c124}.network-nodes i:nth-child(2n){background:#86aed5}.prediction-step{border-color:#356457;background:#123333}.flow-value{color:#84e4d3;font-family:'Roboto',Arial,sans-serif}.sensor-context{background:#0b1928}.sensor-context strong{color:#dbe5ed}.sensor-context small,.sensor-disclaimer,.other-model{color:#9aabba}.other-model strong{color:#93c6c4}
+</style>
+<style scoped>
+.turbofan-visual{border-color:#284357;background:#0a1725;box-shadow:inset 0 1px #ffffff08}
+.turbofan-toolbar .view-toggle,.turbofan-toolbar .camera-reset{border-color:#385064;background:#102238;color:#d4dfe8}
+.view-toggle button,.camera-reset{color:#bdcad5}
+.view-toggle button.active{background:#173e40;color:#82e2d2}
+.canvas-hint{border:1px solid #345064;background:#0f2234e8;color:#adbfcb}
+.engine-overlay{color:#b4c6d1}
+.overlay-separator{background:#526a7c}
+.part-card{border-color:#385064;background:#0e2032ed;box-shadow:0 8px 22px #02071166}
+.part-card strong{color:#e6edf2;font-family:'Roboto',Arial,sans-serif}
+.part-card p{color:#a6b6c2}
+.part-kicker{color:#6edbc8}
+.model-explainer{border-color:#293e52;background:linear-gradient(155deg,#122238,#0e1b2c);box-shadow:inset 0 1px #ffffff08}
+.model-flow-heading h3{color:#edf2f6;font-family:'Roboto',Arial,sans-serif}
+.model-chip{border-color:#326258;background:#143537;color:#8ce0d1}
+.flow-step{border-color:#2b4154;background:#0d1a2a}
+.flow-step strong{color:#d8e2ea}
+.flow-step small{color:#9aabba}
+.flow-arrow{color:#7890a2}
+.network-nodes i{background:#50d5c1;box-shadow:0 0 0 2px #50d5c124}
+.network-nodes i:nth-child(2n){background:#86aed5}
+.prediction-step{border-color:#356457;background:#123333}
+.flow-value{color:#84e4d3;font-family:'Roboto',Arial,sans-serif}
+.sensor-context{background:#0b1928}
+.sensor-context strong{color:#dbe5ed}
+.sensor-context small,.sensor-disclaimer,.other-model{color:#9aabba}
+.other-model strong{color:#93c6c4}
 </style>
