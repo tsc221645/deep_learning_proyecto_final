@@ -64,6 +64,11 @@ models:
   candidates:
     - mlp
     - lstm
+  mlp:
+    hidden_dims:
+      - 128
+      - 64
+    dropout: 0.2
 
 business:
   baseline_policy: null

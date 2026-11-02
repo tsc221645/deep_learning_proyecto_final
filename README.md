@@ -92,3 +92,12 @@ conda activate dm1
 ```
 
 El protocolo queda en `docs/experimental_protocol.md`. El baseline usa la mediana de las etiquetas de entrenamiento y reporta métricas en validación. No carga ni evalúa el test oficial.
+
+## Fase 6: entrenamiento del MLP
+
+```powershell
+conda activate dm1
+.\scripts\train_mlp.ps1
+```
+
+Entrena tres semillas y selecciona el checkpoint con menor MAE de validación. Guarda historial, predicciones, gráficas y resultados en `artifacts/`. No carga el test oficial.

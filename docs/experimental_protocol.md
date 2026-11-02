@@ -111,3 +111,33 @@ las fases de desarrollo. Después de cerrar arquitectura, hiperparámetros,
 features, transformador, ventana y código de métricas, evaluar una única vez
 los 100 últimos ciclos observados con sus 100 etiquetas oficiales. Registrar
 esa evaluación por separado y reportar cualquier re-evaluación.
+
+## Fase 6: MLP
+
+El MLP aplana cada ventana escalada `(30, 19)` y usa capas densas de 128 y 64
+unidades, activación ReLU, dropout 0.2 y una salida lineal en ciclos. Optimiza
+Huber con Adam y los valores fijados en `configs/config.yaml`. La salida se
+recorta a cero para calcular métricas e inferencia; la pérdida se calcula sobre
+la salida lineal sin recorte. Early stopping sigue el MAE de validación y cada
+semilla conserva su mejor checkpoint. El checkpoint representativo es el de
+menor MAE entre las tres semillas.
+
+`.\scripts\train_mlp.ps1` registra el historial por época, resumen por semilla,
+predicciones de validación, residuales y latencia de inferencia batch uno. Los
+artefactos se guardan bajo `artifacts/metrics/`, `artifacts/figures/` y
+`artifacts/models/`. Solo carga los archivos `train.npz` y `validation.npz`;
+el test oficial permanece reservado.
+
+La corrida local en la RTX 3050 obtuvo MAE de validación de 17.04, 16.95 y
+17.37 ciclos para las semillas 42, 43 y 44. El promedio fue 17.12 ± 0.18
+ciclos; se seleccionó la semilla 43, época 17, con MAE 16.95. La desviación
+reporta variación entre semillas, no un intervalo de confianza sobre motores.
+
+Para inferir sobre una ventana ya escalada:
+
+```python
+from predictguard.models import load_mlp_checkpoint, predict_rul
+
+model, metadata = load_mlp_checkpoint("artifacts/models/mlp_best.pt", "cuda")
+rul_cycles = predict_rul(scaled_window, model)
+```
