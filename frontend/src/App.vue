@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import TurbofanView from './components/TurbofanView.vue'
 
 const tabs = [
   { id: 'fleet', label: 'Flota', icon: '◫' },
@@ -112,6 +113,10 @@ const chart = computed(() => {
     `${24 + index * 752 / (values.length - 1)},${226 - (value - min) * 178 / span}`).join(' ')
   return { points, min, max }
 })
+const latestSensorValue = computed(() => {
+  const records = history.value?.records ?? []
+  return records.length ? Number(records[records.length - 1][sensor.value]) : null
+})
 
 const fmt = value => Number(value ?? 0).toLocaleString('es-GT', { maximumFractionDigits: 2 })
 const money = value => `Q${fmt(value)}`
@@ -153,12 +158,17 @@ const figureUrl = name => `/api/evaluation/figures/${name}`
         </template>
 
         <template v-else-if="activeTab === 'engine'">
-          <div class="page-heading"><div><div class="eyebrow">DETALLE DEL MOTOR</div><h1>Motor #{{ String(selectedEngine ?? 1).padStart(3, '0') }}</h1><p>Mediciones observadas y predicción en el último ciclo disponible.</p></div><select class="engine-select" :value="selectedEngine ?? ''" @change="loadEngine(Number($event.target.value))"><option disabled value="">Seleccionar motor</option><option v-for="engine in engines" :key="engine.unit_id" :value="engine.unit_id">Motor #{{ String(engine.unit_id).padStart(3, '0') }}</option></select></div>
+          <div class="page-heading"><div><div class="eyebrow">DETALLE Y EXPLORADOR</div><h1>Motor #{{ String(selectedEngine ?? 1).padStart(3, '0') }}</h1><p>Señales, predicciones y vista interactiva del turbofan seleccionado.</p></div><select class="engine-select" :value="selectedEngine ?? ''" @change="loadEngine(Number($event.target.value))"><option disabled value="">Seleccionar motor</option><option v-for="engine in engines" :key="engine.unit_id" :value="engine.unit_id">Motor #{{ String(engine.unit_id).padStart(3, '0') }}</option></select></div>
           <div v-if="!history" class="empty-state">Selecciona un motor en la vista de flota.</div>
           <template v-else>
             <div class="engine-top"><div class="engine-fact"><span>Ciclos observados</span><strong>{{ history.last_observed_cycle }}</strong></div><div class="engine-fact"><span>RUL predicho · MLP</span><strong>{{ fmt(comparison?.predictions?.mlp?.rul_predicted) }}</strong><small>ciclos</small></div><div class="engine-fact"><span>RUL predicho · LSTM</span><strong>{{ fmt(comparison?.predictions?.lstm?.rul_predicted) }}</strong><small>ciclos</small></div></div>
             <section class="panel chart-panel"><div class="panel-head"><div><h2>Señal observada</h2><p>Trayectoria disponible del motor seleccionado</p></div><label class="inline-control">Sensor <select v-model="sensor"><option v-for="feature in history.features.filter(item => item.startsWith('sensor_'))" :key="feature" :value="feature">{{ feature }}</option></select></label></div><div class="chart-wrap"><div class="chart-y"><span>{{ fmt(chart.max) }}</span><span>{{ fmt(chart.min) }}</span></div><svg viewBox="0 0 800 250" preserveAspectRatio="none" role="img" :aria-label="`Trayectoria de ${sensor}`"><line x1="24" y1="48" x2="776" y2="48" class="grid-line" /><line x1="24" y1="137" x2="776" y2="137" class="grid-line" /><line x1="24" y1="226" x2="776" y2="226" class="grid-line" /><polyline :points="chart.points" class="sensor-line" /></svg></div><div class="chart-axis"><span>Ciclo 1</span><span>Ciclo {{ history.last_observed_cycle }}</span></div></section>
+            <section class="panel turbofan-panel">
+              <div class="turbofan-panel-heading"><div><span class="eyebrow">VISTA ESQUEMÁTICA 3D</span><h2>Arquitectura de un turbofan</h2><p>Gira el motor para observar el flujo desde la admisión hasta el escape.</p></div><div class="rul-pill"><span>RUL estimado · MLP</span><strong>{{ fmt(comparison?.predictions?.mlp?.rul_predicted) }} <small>ciclos</small></strong></div></div>
+              <TurbofanView :engine-id="selectedEngine" :observed-cycle="history.last_observed_cycle" :mlp-rul="comparison?.predictions?.mlp?.rul_predicted ?? null" :lstm-rul="comparison?.predictions?.lstm?.rul_predicted ?? null" :sensor="sensor" :sensor-value="latestSensorValue" />
+            </section>
             <div class="info-strip"><strong>Etiqueta real:</strong> el conjunto oficial solo proporciona RUL real para el último ciclo observado de cada motor. No se muestran etiquetas inventadas para ciclos anteriores.</div>
+            <div class="info-strip visual-disclaimer"><strong>Modelo conceptual:</strong> la geometría ilustra componentes típicos de un turbofan, no el diseño exacto de un motor NASA. C-MAPSS no especifica la ubicación física de cada sensor y PredictGuard no está destinado a mantenimiento real.</div>
           </template>
         </template>
 
@@ -179,3 +189,8 @@ const figureUrl = name => `/api/evaluation/figures/${name}`
     </div>
   </div>
 </template>
+
+<style scoped>
+.turbofan-panel{padding:20px;margin:20px 0 16px}.turbofan-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:2px 2px 17px}.turbofan-panel-heading .eyebrow{margin-bottom:6px}.turbofan-panel-heading h2{margin-bottom:5px;font-size:18px}.turbofan-panel-heading p{margin:0;color:#7c8b9b;font-size:12px}.rul-pill{min-width:170px;padding:10px 14px;background:#e8f8f5;border:1px solid #d1efe8;border-radius:10px}.rul-pill span{display:block;color:#52877f;font-size:10px;font-weight:700}.rul-pill strong{display:block;margin-top:3px;color:#118e7c;font:800 21px Manrope,Arial,sans-serif}.rul-pill small{font:600 10px 'DM Sans',Arial,sans-serif;color:#67978f}.visual-disclaimer{margin-top:12px}.visual-empty{padding:48px 20px;text-align:center}.visual-empty-icon{color:#17ac98;font-size:30px}.visual-empty h2{margin:11px 0 7px}.visual-empty p{margin:0;color:#7c8b9b;font-size:12px}.visual-empty .primary-button{margin-top:18px}
+@media(max-width:760px){.turbofan-panel{padding:13px}.turbofan-panel-heading{align-items:flex-start}.rul-pill{min-width:130px;padding:8px}.rul-pill strong{font-size:17px}.turbofan-panel-heading h2{font-size:15px}.turbofan-panel-heading p{font-size:10px}}
+</style>

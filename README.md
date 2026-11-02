@@ -116,8 +116,11 @@ oficial se evaluó después de congelar la selección en
 
 ## Fases 11–12: aplicación y despliegue
 
-La plataforma tiene API FastAPI y cuatro vistas Vue: flota, motor, modelos y
-simulador. Desde un clon limpio con Docker Desktop:
+La plataforma tiene API FastAPI y cuatro vistas Vue: flota, detalle del motor
+con explorador 3D y flujo del MLP, modelos y simulador. La vista 3D permite
+rotar, acercar y seleccionar componentes; es una representación conceptual,
+no una reconstrucción física ni un mapa real de sensores. Desde un clon limpio
+con Docker Desktop:
 
 ```powershell
 docker compose up --build
