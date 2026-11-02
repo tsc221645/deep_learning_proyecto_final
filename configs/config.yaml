@@ -69,6 +69,10 @@ models:
       - 128
       - 64
     dropout: 0.2
+  lstm:
+    hidden_size: 64
+    num_layers: 2
+    dropout: 0.2
 
 business:
   baseline_policy: null

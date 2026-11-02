@@ -101,3 +101,10 @@ conda activate dm1
 ```
 
 Entrena tres semillas y selecciona el checkpoint con menor MAE de validación. Guarda historial, predicciones, gráficas y resultados en `artifacts/`. No carga el test oficial.
+
+## Fases 7–10: LSTM, comparación, test y valor
+
+El código para las fases 7–10 está preparado. Requiere ejecutar entrenamiento y
+selección para producir resultados reales; sigue la [guía de Kaggle](docs/kaggle_training.md)
+si prefieres usar una GPU remota. El test oficial se evalúa solo después de
+congelar la selección en `artifacts/experiments/selected.json`.
