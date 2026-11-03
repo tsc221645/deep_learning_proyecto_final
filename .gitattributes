@@ -1,1 +1,2 @@
 data/raw/*.txt -text
+artifacts/processed/**/*.json -text

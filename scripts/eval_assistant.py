@@ -262,7 +262,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--tag", default="", help="Subcarpeta de salida (p. ej. haiku) para no pisar otras corridas.")
     args = parser.parse_args()
+    out = OUT / args.tag if args.tag else OUT
 
     runtime = Runtime(ROOT)
     assistant = Assistant(runtime)
@@ -272,8 +274,8 @@ def main() -> None:
     if args.limit:
         step = max(1, len(cases) // args.limit)
         cases = cases[::step][:args.limit]
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "cases.json").write_text(json.dumps(cases, ensure_ascii=False, indent=2), encoding="utf-8")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "cases.json").write_text(json.dumps(cases, ensure_ascii=False, indent=2), encoding="utf-8")
 
     results = {}
     for agent in (True, False):
@@ -288,9 +290,9 @@ def main() -> None:
                "baseline": summarize(results["baseline"]),
                "agente_por_categoria": by_category(results["agente"]),
                "baseline_por_categoria": by_category(results["baseline"])}
-    (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    (OUT / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-    with (OUT / "per_case.csv").open("w", newline="", encoding="utf-8") as stream:
+    (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    with (out / "per_case.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(["id", "categoria", "config", "paso", "hechos_ok", "herramientas_ok", "alucinacion",
                          "latencia_ms", "tokens_in", "tokens_out", "costo_usd", "herramientas", "faltantes"])
