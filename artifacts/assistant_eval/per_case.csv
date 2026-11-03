@@ -1,0 +1,65 @@
+id,categoria,config,paso,hechos_ok,herramientas_ok,alucinacion,latencia_ms,tokens_in,tokens_out,costo_usd,herramientas,faltantes
+01,diagnostico_motor,agente,True,True,True,False,8435,854,618,0.008807,get_engine_diagnosis,[]
+02,diagnostico_motor,agente,True,True,True,False,8641,869,680,0.009457,get_engine_diagnosis,[]
+03,diagnostico_motor,agente,True,True,True,False,9162,851,695,0.009571,get_engine_diagnosis,[]
+04,diagnostico_motor,agente,True,True,True,False,8875,872,726,0.009923,get_engine_diagnosis,[]
+05,diagnostico_motor,agente,True,True,True,False,5936,851,658,0.009201,get_engine_diagnosis,[]
+06,diagnostico_motor,agente,True,True,True,False,5718,864,675,0.009397,get_engine_diagnosis,[]
+07,diagnostico_motor,agente,True,True,True,False,5901,855,678,0.009409,get_engine_diagnosis,[]
+08,diagnostico_motor,agente,True,True,True,False,5325,856,590,0.008531,get_engine_diagnosis,[]
+09,diagnostico_motor,agente,True,True,True,False,7106,850,655,0.009169,get_engine_diagnosis,[]
+10,diagnostico_motor,agente,True,True,True,False,4947,862,564,0.008283,get_engine_diagnosis,[]
+11,flota,agente,True,True,True,False,5961,940,707,0.009869,get_fleet_overview,[]
+12,flota,agente,True,True,True,False,5130,936,630,0.009091,get_fleet_overview,[]
+13,flota,agente,True,True,True,False,6557,970,559,0.008449,get_fleet_overview,[]
+14,flota,agente,True,True,True,False,6258,657,528,0.007513,get_fleet_overview,[]
+15,flota,agente,True,True,True,False,4957,972,561,0.008473,get_fleet_overview,[]
+16,simulador,agente,True,True,True,False,4891,817,467,0.007223,simulate_maintenance,[]
+17,simulador,agente,True,True,True,False,3906,857,402,0.006653,simulate_maintenance,[]
+18,simulador,agente,True,True,True,False,5516,865,555,0.008199,simulate_maintenance,[]
+19,simulador,agente,True,True,True,False,5114,910,559,0.008329,simulate_maintenance,[]
+20,simulador,agente,False,True,True,True,7667,1516,907,0.013021,simulate_maintenance+simulate_maintenance,[]
+21,metricas,agente,False,True,True,True,4384,879,387,0.006547,get_model_metrics,[]
+22,metricas,agente,True,True,True,False,4336,865,367,0.006319,get_model_metrics,[]
+23,metricas,agente,True,True,True,False,4973,875,483,0.007499,get_model_metrics,[]
+24,metricas,agente,True,True,True,False,6667,865,684,0.009489,get_model_metrics,[]
+25,concepto,agente,True,True,True,False,2888,128,299,0.003706,,[]
+26,concepto,agente,True,True,True,False,3819,133,481,0.005536,,[]
+27,concepto,agente,True,True,True,False,3373,128,349,0.004206,,[]
+28,concepto,agente,True,True,True,False,2894,129,324,0.003958,,[]
+29,concepto,agente,True,True,True,False,4513,139,526,0.005998,,[]
+30,robustez,agente,True,True,True,False,2864,131,289,0.003612,,[]
+31,robustez,agente,True,True,True,False,5698,971,558,0.008441,get_engine_diagnosis,[]
+32,robustez,agente,False,True,False,True,3674,129,348,0.004198,,[]
+01,diagnostico_motor,baseline,False,False,,False,6168,70,786,0.008255,,"[5.8, 6.7]"
+02,diagnostico_motor,baseline,False,False,,False,6811,70,761,0.008005,,"[7.4, 8.8]"
+03,diagnostico_motor,baseline,False,False,,False,6456,70,766,0.008055,,[26.0]
+04,diagnostico_motor,baseline,False,False,,True,6398,70,768,0.008075,,"[26.1, 27.7]"
+05,diagnostico_motor,baseline,False,False,,True,5558,70,677,0.007165,,"[58.9, 52.9]"
+06,diagnostico_motor,baseline,False,False,,False,6317,70,737,0.007765,,"[95.6, 83.2]"
+07,diagnostico_motor,baseline,False,False,,True,7324,70,842,0.008815,,"[98.3, 104.1]"
+08,diagnostico_motor,baseline,False,False,,True,6529,70,814,0.008535,,"[119.1, 140.4]"
+09,diagnostico_motor,baseline,False,False,,False,6246,70,772,0.008115,,"[140.7, 144.0]"
+10,diagnostico_motor,baseline,False,False,,True,5943,70,765,0.008045,,"[206.0, 146.2]"
+11,flota,baseline,False,False,,True,6998,64,845,0.008833,,"[12.0, 34.0]"
+12,flota,baseline,False,False,,True,5805,62,656,0.006939,,[34.0]
+13,flota,baseline,False,False,,True,5802,79,649,0.006903,,[27.0]
+14,flota,baseline,False,False,,False,5451,66,661,0.006997,,"[34.0, 68.0, 31.0]"
+15,flota,baseline,False,False,,True,5552,80,710,0.007515,,[33.0]
+16,simulador,baseline,False,False,,False,5185,77,642,0.006829,,"[17850.0, 11491.6, 11333.06]"
+17,simulador,baseline,False,False,,False,8010,80,893,0.009345,,[17850.0]
+18,simulador,baseline,False,False,,False,6109,83,807,0.008491,,[6516.94]
+19,simulador,baseline,False,False,,False,6526,85,794,0.008365,,[13981.74]
+20,simulador,baseline,False,False,,False,7459,80,881,0.009225,,[20350.0]
+21,metricas,baseline,False,False,,True,5967,72,524,0.005639,,[14.702450466156005]
+22,metricas,baseline,False,False,,True,5833,65,635,0.006735,,[24.07068837734989]
+23,metricas,baseline,False,False,,False,6329,70,719,0.007585,,"[7.310549287796021, 6.457819423675537]"
+24,metricas,baseline,False,False,,False,6055,65,705,0.007435,,"[308.3706875039575, 18.145924220686492]"
+25,concepto,baseline,True,True,,False,4003,58,426,0.004631,,[]
+26,concepto,baseline,True,True,,False,5432,63,629,0.006671,,[]
+27,concepto,baseline,True,True,,False,5322,58,612,0.006491,,[]
+28,concepto,baseline,True,True,,False,4095,59,434,0.004713,,[]
+29,concepto,baseline,True,True,,False,5710,69,653,0.006923,,[]
+30,robustez,baseline,True,True,,False,3185,61,376,0.004137,,[]
+31,robustez,baseline,False,False,,False,4915,88,458,0.005011,,[144.0]
+32,robustez,baseline,False,False,,False,5319,59,581,0.006183,,['no (se )?encontr|no existe|entre 1 y 100|1 (a|y) 100|inv[aá]lid']

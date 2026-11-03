@@ -4,6 +4,7 @@ import FleetView from './views/FleetView.vue'
 import EngineView from './views/EngineView.vue'
 import ModelsView from './views/ModelsView.vue'
 import SimulatorView from './views/SimulatorView.vue'
+import AssistantView from './views/AssistantView.vue'
 import { minRul, pad } from './lib/engine.js'
 
 const tabs = [
@@ -11,6 +12,7 @@ const tabs = [
   { id: 'engine', label: 'Motor', hint: 'Diagnóstico y 3D' },
   { id: 'lab', label: 'Modelos', hint: 'Cuánto confiar' },
   { id: 'simulator', label: 'Simulador', hint: 'Cuánto cuesta decidir' },
+  { id: 'assistant', label: 'Asistente', hint: 'Pregunta y obtén explicaciones' },
 ]
 const activeTab = ref('fleet')
 const engines = ref([])
@@ -26,6 +28,12 @@ const simDirty = ref(false)
 const error = ref('')
 const sensor = ref('sensor_11')
 const threshold = ref(15)
+const pendingQuestion = ref('')
+
+function ask(text) {
+  pendingQuestion.value = text
+  go('assistant')
+}
 
 const BASE_FORM = () => ({
   calendar_age: 125, mlp_threshold: 15, lstm_threshold: 15, lead_time_cycles: 5,
@@ -181,8 +189,9 @@ const current = computed(() => tabs.find(t => t.id === activeTab.value))
         <div v-if="error" class="error-banner" role="alert"><span>{{ error }}</span><button @click="error = ''">Cerrar</button></div>
         <template v-if="loading"><div class="skeleton"></div><div class="skeleton"></div><div class="loading-panel">Cargando motores y modelos…</div></template>
         <FleetView v-else-if="activeTab === 'fleet'" v-model:threshold="threshold" :engines="engines" :evaluation="evaluation" @open="id => go('engine', id)" />
-        <EngineView v-else-if="activeTab === 'engine'" v-model:sensor="sensor" :engines="engines" :queue="queue" :history="history" :comparison="comparison" :threshold="threshold" @select="id => go('engine', id)" />
+        <EngineView v-else-if="activeTab === 'engine'" v-model:sensor="sensor" :engines="engines" :queue="queue" :history="history" :comparison="comparison" :threshold="threshold" @select="id => go('engine', id)" @ask="ask" />
         <ModelsView v-else-if="activeTab === 'lab'" :models="models" :evaluation="evaluation" />
+        <AssistantView v-else-if="activeTab === 'assistant'" v-model:threshold="threshold" :engines="engines" :selected-engine="selectedEngine" :pending="pendingQuestion" @consumed="pendingQuestion = ''" />
         <SimulatorView v-else :form="form" :simulation="simulation" :busy="simBusy" :dirty="simDirty" @run="runSimulation" @reset="resetSimulation" />
       </main>
     </div>

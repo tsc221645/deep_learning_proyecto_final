@@ -10,9 +10,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from api.schemas import CompareRequest, PredictionRequest, SimulationRequest
+from api.assistant import Assistant
+from api.schemas import ChatRequest, CompareRequest, PredictionRequest, SimulationRequest
 from api.service import Runtime
 
 logger = logging.getLogger("predictguard.api")
@@ -25,6 +26,7 @@ def create_app(root: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.runtime = Runtime(repo_root)
+        app.state.assistant = Assistant(app.state.runtime)
         logger.info(json.dumps({"event": "models_loaded", "device": str(app.state.runtime.device),
                                 "models": list(app.state.runtime.models)}))
         yield
@@ -51,6 +53,10 @@ def create_app(root: Path | None = None) -> FastAPI:
 
     def runtime(request: Request) -> Runtime:
         return request.app.state.runtime
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return {"service": "PredictGuard API", "docs": "/docs", "web": "Abre la aplicación web en el puerto 8080."}
 
     @app.get("/health")
     def health(request: Request):
@@ -126,6 +132,17 @@ def create_app(root: Path | None = None) -> FastAPI:
         if not path.is_file():
             raise HTTPException(status_code=404, detail="Figura no disponible.")
         return FileResponse(path, media_type="image/png")
+
+    @app.get("/assistant/status")
+    def assistant_status(request: Request):
+        return request.app.state.assistant.status()
+
+    @app.post("/assistant/chat")
+    def assistant_chat(payload: ChatRequest, request: Request):
+        assistant = request.app.state.assistant
+        stream = assistant.chat([m.model_dump() for m in payload.messages], payload.unit_id, payload.threshold)
+        return StreamingResponse(stream, media_type="application/x-ndjson",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     return app
 

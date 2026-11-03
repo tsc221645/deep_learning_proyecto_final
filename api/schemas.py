@@ -46,3 +46,16 @@ class SimulationRequest(BaseModel):
     lstm_threshold: int = Field(default=15, ge=1, le=1000)
     lead_time_cycles: int = Field(default=5, ge=1, le=100)
     costs: CostInput = Field(default_factory=CostInput)
+
+
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messages: list[ChatMessage] = Field(min_length=1, max_length=40)
+    unit_id: int | None = Field(default=None, ge=1, le=100)
+    threshold: int = Field(default=15, ge=1, le=1000)

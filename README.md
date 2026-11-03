@@ -137,3 +137,14 @@ umbrales y los supuestos del simulador.
 
 Para interpretar las pantallas, umbrales, métricas y costos hipotéticos,
 consulta la [guía de uso de la interfaz](docs/ui_guide.md).
+
+## Asistente de mantenimiento (LLM)
+
+La pestaña **Asistente** es un chat con Claude que consulta, mediante herramientas, la flota, el diagnóstico
+por motor (MLP y LSTM), el simulador de costos y las métricas. Las cifras salen de los modelos, no del LLM.
+
+1. Copia `.env.example` a `.env` y pega tu llave en `ANTHROPIC_API_KEY` (`.env` no se sube a git).
+2. Reinicia la API (`uvicorn api.main:app`) o `docker compose up --build`.
+3. Sin llave o sin red, el asistente responde con un resumen predefinido y lo indica en pantalla.
+
+Código: `api/assistant.py` (endpoints `/assistant/chat` y `/assistant/status`), `frontend/src/views/AssistantView.vue`.

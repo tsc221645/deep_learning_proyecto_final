@@ -64,6 +64,7 @@ env/
 !/artifacts/experiments/results.csv
 !/artifacts/experiments/selected.json
 !/artifacts/business/
+!/artifacts/assistant_eval/
 !/artifacts/business/*.csv
 !/artifacts/business/*.json
 /artifacts/processed/*

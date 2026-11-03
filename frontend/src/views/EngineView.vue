@@ -15,7 +15,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 const sensor = defineModel('sensor', { type: String, default: 'sensor_11' })
-const emit = defineEmits(['select', 'back'])
+const emit = defineEmits(['select', 'back', 'ask'])
 
 const id = computed(() => props.history?.unit_id ?? null)
 const observed = computed(() => props.history?.last_observed_cycle ?? 0)
@@ -72,6 +72,7 @@ const reading = computed(() => {
       <p>Qué tan cerca está de su fin de vida según los dos modelos, qué muestran sus señales y en qué parte del motor se miden.</p>
     </div>
     <div class="nav-engine">
+      <button class="ghost-button ask-button" :disabled="!history" @click="emit('ask', `Explícame el estado del motor #${pad(id)} y qué haría falta hacer`)">✦ Preguntar al asistente</button>
       <button class="ghost-button" :disabled="prevId === null" @click="emit('select', prevId)">← Más urgente</button>
       <select class="engine-select" :value="id ?? ''" aria-label="Seleccionar motor" @change="emit('select', Number($event.target.value))">
         <option v-for="engine in engines" :key="engine.unit_id" :value="engine.unit_id">Motor #{{ pad(engine.unit_id) }} · RUL {{ fmt(minRul(engine.predictions), 0) }}</option>

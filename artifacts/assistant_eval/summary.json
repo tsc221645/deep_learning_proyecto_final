@@ -1,0 +1,97 @@
+{
+  "modelo": "claude-sonnet-5-5",
+  "agente": {
+    "casos": 32,
+    "respuestas_claude": 32,
+    "pass_rate": 0.906,
+    "facts_rate": 1.0,
+    "hallucination_rate": 0.094,
+    "tool_accuracy": 0.969,
+    "latency_ms_mean": 5502.6875,
+    "latency_ms_p95": 8641,
+    "context_tokens_mean": 4824.4,
+    "output_tokens_mean": 547.1562,
+    "api_calls_mean": 1.7812,
+    "cost_usd_per_query": 0.00775,
+    "cost_usd_total": 0.2481
+  },
+  "baseline": {
+    "casos": 32,
+    "respuestas_claude": 32,
+    "pass_rate": 0.188,
+    "facts_rate": 0.188,
+    "hallucination_rate": 0.344,
+    "tool_accuracy": null,
+    "latency_ms_mean": 5900.375,
+    "latency_ms_p95": 7324,
+    "context_tokens_mean": 1347.1,
+    "output_tokens_mean": 686.8125,
+    "api_calls_mean": 1.0,
+    "cost_usd_per_query": 0.00726,
+    "cost_usd_total": 0.2324
+  },
+  "agente_por_categoria": {
+    "diagnostico_motor": {
+      "n": 10,
+      "pass": 10,
+      "halluc": 0
+    },
+    "flota": {
+      "n": 5,
+      "pass": 5,
+      "halluc": 0
+    },
+    "simulador": {
+      "n": 5,
+      "pass": 4,
+      "halluc": 1
+    },
+    "metricas": {
+      "n": 4,
+      "pass": 3,
+      "halluc": 1
+    },
+    "concepto": {
+      "n": 5,
+      "pass": 5,
+      "halluc": 0
+    },
+    "robustez": {
+      "n": 3,
+      "pass": 2,
+      "halluc": 1
+    }
+  },
+  "baseline_por_categoria": {
+    "diagnostico_motor": {
+      "n": 10,
+      "pass": 0,
+      "halluc": 5
+    },
+    "flota": {
+      "n": 5,
+      "pass": 0,
+      "halluc": 4
+    },
+    "simulador": {
+      "n": 5,
+      "pass": 0,
+      "halluc": 0
+    },
+    "metricas": {
+      "n": 4,
+      "pass": 0,
+      "halluc": 2
+    },
+    "concepto": {
+      "n": 5,
+      "pass": 5,
+      "halluc": 0
+    },
+    "robustez": {
+      "n": 3,
+      "pass": 1,
+      "halluc": 0
+    }
+  }
+}
